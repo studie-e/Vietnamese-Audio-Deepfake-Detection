@@ -2,5 +2,3 @@
 # Python
 # ========================
 __pycache__/
-data/clean_data/*
-data/features_mel/*
