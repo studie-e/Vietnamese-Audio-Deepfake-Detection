@@ -19,7 +19,7 @@ N_FFT = 2048
 HOP_LENGTH = 512
 
 # Hai nhãn phân loại của chúng ta
-CLASSES = ['real', 'fake']
+CLASSES = ['real', 'ai']
 
 def extract_mel_spectrogram(input_wav_path, output_npy_path):
     """Hàm xử lý cho 1 file âm thanh"""

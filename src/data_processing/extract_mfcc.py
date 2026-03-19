@@ -2,13 +2,14 @@ import os
 import librosa
 import numpy as np
 from tqdm import tqdm
+import soundfile as sf
 import warnings
 
 warnings.filterwarnings('ignore')
 
 # --- 1. CẤU HÌNH ---
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-CLEAN_DATA_DIR = os.path.join(BASE_DIR, 'data', 'process') 
+CLEAN_DATA_DIR = os.path.join(BASE_DIR, 'data', 'clean_data') 
 OUTPUT_DIR = os.path.join(BASE_DIR, 'data', 'features_final')
 
 if not os.path.exists(OUTPUT_DIR):
