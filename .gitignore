@@ -1,4 +1,18 @@
-# ========================
-# Python
-# ========================
+# Bỏ qua các file dữ liệu nặng
+data/clean_data/
+data/fetures_model/MLP/*.npy
+data/features_final/*.npy
+*.wav
+*.npy
+
+# Bỏ qua các file mô hình đã lưu
+models_saved/*.pkl
+
+# Bỏ qua ảnh báo cáo (nếu bạn muốn tự sinh ra mỗi lần chạy)
+# figures/*.png 
+
+# Bỏ qua rác của Python và VS Code
 __pycache__/
+*.pyc
+.vscode/
+.DS_Store
