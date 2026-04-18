@@ -16,3 +16,6 @@ Dự án được chia module hóa để dễ dàng quản lý:
 Mở terminal và chạy lệnh sau để cài đặt các công cụ cần thiết:
 ```bash
 pip install -r requirements.txt
+
+**chạy web
+dùng lệnh: streamlit run app_web.py
