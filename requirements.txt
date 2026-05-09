@@ -1,3 +1,16 @@
 pydub
 librosa
 soundfile
+streamlit
+numpy
+scikit-learn
+xgboost
+joblib
+tqdm
+pandas
+torch
+transformers
+spafe
+scipy
+shap
+matplotlib

@@ -7,7 +7,7 @@ from sklearn.svm import SVC
 from sklearn.metrics import accuracy_score, classification_report, confusion_matrix
 
 
-LOAD_DIR = 'data/features_model\svm'
+LOAD_DIR = os.path.join('data', 'features_model', 'svm')
 X = np.load(os.path.join(LOAD_DIR, 'X_all.npy'))
 y = np.load(os.path.join(LOAD_DIR, 'y_all.npy'))
 

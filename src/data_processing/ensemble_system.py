@@ -23,7 +23,9 @@ class VietGuardEnsemble:
         self.scaler_svm = joblib.load(os.path.join(models_dir, 'scaler_final.pkl'))
         
         self.xgb_model = joblib.load(os.path.join(models_dir, 'best_xgboost.pkl'))
+        
         self.mlp_model = joblib.load(os.path.join(models_dir, 'best_mlp.pkl'))
+        self.scaler_mlp = joblib.load(os.path.join(models_dir, 'scaler_mlp.pkl'))
         
         # Load Wav2Vec2
         self.processor = Wav2Vec2Processor.from_pretrained("facebook/wav2vec2-base")
@@ -73,12 +75,7 @@ class VietGuardEnsemble:
             p_w2v = self.mlp_w2v.predict_proba(self.scaler_w2v.transform(feat_w2v))[0][1]
             p_svm = self.svm_mfcc.predict_proba(self.scaler_svm.transform(feat_mfcc_40))[0][1]
             p_xgb = self.xgb_model.predict_proba(feat_mfcc_480)[0][1]
-            
-            # 🔥 ĐÃ FIX LỖI Ở ĐÂY: Trả MLP về ăn 40 đặc trưng giống SVM
-            try:
-                p_mlp = self.mlp_model.predict_proba(self.scaler_svm.transform(feat_mfcc_40))[0][1]
-            except:
-                p_mlp = self.mlp_model.predict_proba(feat_mfcc_40)[0][1]
+            p_mlp = self.mlp_model.predict_proba(self.scaler_mlp.transform(feat_mfcc_40))[0][1]
 
             # Soft Voting
             final_ai_prob = (p_lfcc + p_w2v + p_svm + p_xgb + p_mlp) / 5

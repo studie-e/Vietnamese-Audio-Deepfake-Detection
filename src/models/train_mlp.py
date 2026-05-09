@@ -3,11 +3,12 @@ import os
 import numpy as np
 import joblib # Thư viện chuẩn để lưu model scikit-learn
 from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import StandardScaler
 from sklearn.neural_network import MLPClassifier
 from sklearn.metrics import accuracy_score, classification_report
 
 # Định nghĩa đường dẫn
-FEATURES_DIR = "data/features_model/mlp"
+FEATURES_DIR = "data/features_model/MLP"
 MODEL_SAVE_DIR = "models_saved"
 
 # Đảm bảo thư mục lưu model tồn tại
@@ -30,6 +31,11 @@ def train_model():
     X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42, stratify=y)
     print(f"Training data shape: {X_train.shape}")
     print(f"Testing data shape: {X_test.shape}")
+
+    # Chuẩn hóa dữ liệu (bắt buộc với MLP)
+    scaler = StandardScaler()
+    X_train_scaled = scaler.fit_transform(X_train)
+    X_test_scaled = scaler.transform(X_test)
     
     # Khởi tạo mô hình MLP
     # Bạn có thể tuning các tham số (hidden_layer_sizes, learning_rate, max_iter,...) sau
@@ -47,12 +53,12 @@ def train_model():
         verbose=True                   # In quá trình học ra màn hình
     )
     
-    # Huấn luyện
-    mlp_model.fit(X_train, y_train)
+    # Huấn luyện trên dữ liệu đã chuẩn hóa
+    mlp_model.fit(X_train_scaled, y_train)
     
     # Đánh giá trên tập test
     print("\nEvaluating model...")
-    y_pred = mlp_model.predict(X_test)
+    y_pred = mlp_model.predict(X_test_scaled)
     
     acc = accuracy_score(y_test, y_pred)
     print(f"Accuracy on Test Set: {acc * 100:.2f}%")
@@ -61,10 +67,13 @@ def train_model():
     # 0 = Real, 1 = AI
     print(classification_report(y_test, y_pred, target_names=["Real (0)", "AI (1)"]))
     
-    # Lưu model ra file .pkl
+    # Lưu model và scaler ra file .pkl
     model_save_path = os.path.join(MODEL_SAVE_DIR, "best_mlp.pkl")
+    scaler_save_path = os.path.join(MODEL_SAVE_DIR, "scaler_mlp.pkl")
     joblib.dump(mlp_model, model_save_path)
+    joblib.dump(scaler, scaler_save_path)
     print(f"\nModel successfully saved to: {model_save_path}")
+    print(f"Scaler successfully saved to: {scaler_save_path}")
 
 if __name__ == "__main__":
     train_model()

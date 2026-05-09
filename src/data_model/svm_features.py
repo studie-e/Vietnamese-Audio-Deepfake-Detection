@@ -5,7 +5,7 @@ from tqdm import tqdm
 
 DATA_REAL = 'data/clean_data/real'
 DATA_AI = 'data/clean_data/ai'
-SAVE_DIR = 'data/features_model\svm'
+SAVE_DIR = os.path.join('data', 'features_model', 'svm')
 os.makedirs(SAVE_DIR, exist_ok=True)
 
 def extract_mfcc(file_path):
