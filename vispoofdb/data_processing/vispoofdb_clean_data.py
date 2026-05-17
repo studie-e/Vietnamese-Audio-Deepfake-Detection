@@ -1,15 +1,22 @@
 import os
+import sys
 import librosa
 import soundfile as sf
 from tqdm import tqdm
 from pathlib import Path
 import warnings
 
+# Fix encoding cho terminal Windows
+if sys.stdout.encoding != 'utf-8':
+    sys.stdout.reconfigure(encoding='utf-8')
+if sys.stderr.encoding != 'utf-8':
+    sys.stderr.reconfigure(encoding='utf-8')
+
 warnings.filterwarnings('ignore')
 
 # --- CẤU HÌNH ĐƯỜNG DẪN ---
 BASE_DIR = Path(__file__).resolve().parents[2]
-INPUT_BASE = BASE_DIR / "vispoofdb" / "data"
+INPUT_BASE = BASE_DIR / "vispoofdb" / "data" / "raw"
 OUTPUT_BASE = BASE_DIR / "vispoofdb" / "data" / "clean_data"
 
 TARGET_SR = 16000
@@ -20,12 +27,12 @@ CLASSES = {'real': 0, 'fake': 1}
 
 def clean_audio_data():
     """
-    Làm sạch dữ liệu âm thanh từ thư mục data/raw
+    Làm sạch dữ liệu âm thanh từ thư mục vispoofdb/data/raw
     - Chuẩn hóa sample rate: 16kHz
     - Chuẩn hóa độ dài: 5 giây
-    - Lưu kết quả vào data/clean_data
+    - Lưu kết quả vào vispoofdb/data/clean_data
     """
-    print("🔄 Đang làm sạch dữ liệu từ data/raw...")
+    print("🔄 Đang làm sạch dữ liệu từ vispoofdb/data/raw...")
     print(f"   Input: {INPUT_BASE}")
     print(f"   Output: {OUTPUT_BASE}\n")
     
@@ -43,7 +50,8 @@ def clean_audio_data():
             print(f"⚠️  Thư mục không tồn tại: {input_dir}")
             continue
             
-        files = [f for f in os.listdir(input_dir) if f.lower().endswith(('.wav', '.mp3', '.m4a'))]
+        # Quét đệ quy tất cả file âm thanh trong thư mục và các thư mục con
+        files = list(input_dir.rglob("*.wav")) + list(input_dir.rglob("*.mp3")) + list(input_dir.rglob("*.m4a"))
         
         if not files:
             print(f"⚠️  Thư mục trống: {folder}")
@@ -51,9 +59,11 @@ def clean_audio_data():
         
         print(f"📂 {folder.upper()} ({len(files)} files)")
         
-        for filename in tqdm(files, desc=f"  Xử lý {folder}"):
-            path_in = input_dir / filename
-            path_out = output_dir / f"{os.path.splitext(filename)[0]}.wav"
+        for path_in in tqdm(files, desc=f"  Xử lý {folder}"):
+            # Giữ nguyên cấu trúc thư mục con trong output
+            relative = path_in.relative_to(input_dir)
+            path_out = output_dir / relative.parent / f"{path_in.stem}.wav"
+            os.makedirs(path_out.parent, exist_ok=True)
 
             try:
                 # 1. Đọc file âm thanh
@@ -73,11 +83,11 @@ def clean_audio_data():
                 total_processed += 1
                 
             except Exception as e:
-                print(f"    ⚠️  Lỗi: {filename} - {str(e)[:50]}")
+                print(f"      Lỗi: {str(e)[:50]}")
                 total_errors += 1
 
     print(f"\n{'='*60}")
-    print(f"✅ HOÀN THÀNH!")
+    print(f" HOÀN THÀNH!")
     print(f"   Tổng file xử lý thành công: {total_processed}")
     print(f"   Lỗi: {total_errors}")
     print(f"   Output: {OUTPUT_BASE}")
