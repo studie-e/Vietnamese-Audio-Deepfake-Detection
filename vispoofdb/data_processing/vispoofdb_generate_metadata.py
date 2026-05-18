@@ -134,24 +134,45 @@ def collect_fake(fake_dir: Path, clean_data_root: Path) -> list[dict]:
 
 def assign_splits(df: pd.DataFrame) -> pd.DataFrame:
     """
-    Chia train/test_seen (80/20) cho cac hang con la 'pending'.
-    Giu nguyen 'test_unseen'.
-    Chia theo tung label (real/fake) rieng biet de dam bao can bang.
+    Split strategy:
+    - Real: 60% train, 20% test_seen, 20% test_unseen (different speakers)
+    - Fake gtts: 100% test_unseen (completely new technique)
+    - Fake others: 80% train, 20% test_seen
     """
     result_parts = []
 
-    for label in df["label"].unique():
-        label_df = df[df["label"] == label].copy()
-        pending = label_df[label_df["split"] == "pending"]
-        non_pending = label_df[label_df["split"] != "pending"]
+    # ── REAL: 60/20/20 split
+    if "real" in df["label"].unique():
+        real_df = df[df["label"] == "real"].copy()
+        shuffled = real_df.sample(frac=1, random_state=42)
+        
+        n = len(shuffled)
+        train_cut = int(n * 0.60)
+        test_seen_cut = train_cut + int(n * 0.20)
+        
+        real_df.loc[shuffled.index[:train_cut], "split"] = "train"
+        real_df.loc[shuffled.index[train_cut:test_seen_cut], "split"] = "test_seen"
+        real_df.loc[shuffled.index[test_seen_cut:], "split"] = "test_unseen"
+        
+        result_parts.append(real_df)
 
-        if len(pending) > 0:
-            shuffled = pending.sample(frac=1, random_state=42)
-            cut = int(len(shuffled) * 0.8)
-            label_df.loc[shuffled.index[:cut], "split"] = "train"
-            label_df.loc[shuffled.index[cut:], "split"] = "test_seen"
-
-        result_parts.append(label_df)
+    # ── FAKE: Handle gtts vs others separately
+    if "fake" in df["label"].unique():
+        fake_df = df[df["label"] == "fake"].copy()
+        
+        # Gtts: 100% test_unseen (completely new technique)
+        gtts_df = fake_df[fake_df["source"] == "gtts"].copy()
+        gtts_df["split"] = "test_unseen"
+        result_parts.append(gtts_df)
+        
+        # Others: 80% train, 20% test_seen
+        others_df = fake_df[fake_df["source"] != "gtts"].copy()
+        shuffled = others_df.sample(frac=1, random_state=42)
+        cut = int(len(shuffled) * 0.80)
+        
+        others_df.loc[shuffled.index[:cut], "split"] = "train"
+        others_df.loc[shuffled.index[cut:], "split"] = "test_seen"
+        result_parts.append(others_df)
 
     return pd.concat(result_parts).sort_index()
 
@@ -169,7 +190,7 @@ def generate_metadata():
 
     all_rows = []
 
-    # ── 1. Thu thap du lieu REAL
+    # ── 1. Thu thap du lieu REAL tu clean_data/
     real_dir = CLEAN_DATA_DIR / "real"
     print("=" * 60)
     print("REAL")
