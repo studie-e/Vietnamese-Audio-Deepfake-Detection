@@ -5,6 +5,7 @@ from models.baseline import Full_AASIST_Model
 import warnings
 import random
 from pathlib import Path
+import pandas as pd
 
 warnings.filterwarnings("ignore")
 
@@ -61,30 +62,47 @@ if __name__ == "__main__":
     print("HỆ THỐNG KIỂM TRA GIỌNG NÓI AI (AASIST)")
     print("="*50)
 
-    # 1. Định nghĩa thư mục chứa file Test
-    bonafide_dir = Path("dataset/test/bonafide")
-    spoof_dir = Path("dataset/test/spoof")
-
-    # 2. Lấy danh sách TOÀN BỘ các file .wav trong 2 thư mục đó
-    bonafide_files = list(bonafide_dir.glob("*.wav"))
-    spoof_files = list(spoof_dir.glob("*.wav"))
-
-    # Kiểm tra xem thư mục có file không
-    if len(bonafide_files) == 0 or len(spoof_files) == 0:
-        print("Lỗi: Không tìm thấy file âm thanh nào trong thư mục test!")
+    # Đường dẫn metadata từ AASIST/predict.py
+    metadata_path = Path(__file__).parent.parent / "vispoofdb" / "data" / "clean_data" / "metadata.csv"
+    
+    if not metadata_path.exists():
+        print(f"Lỗi: Không tìm thấy metadata: {metadata_path}")
+        exit(1)
+    
+    # Đọc metadata và lọc test_unseen
+    df = pd.read_csv(metadata_path)
+    test_unseen_df = df[df["split"] == "test_unseen"]
+    
+    base_dir = metadata_path.parent
+    
+    # Tách real và fake từ test_unseen
+    real_files = []
+    fake_files = []
+    
+    for _, row in test_unseen_df.iterrows():
+        file_path = base_dir / row["file_path"]
+        if file_path.exists():
+            if row["label"] == "real":
+                real_files.append(str(file_path))
+            else:
+                fake_files.append(str(file_path))
+    
+    # Kiểm tra xem có file không
+    if len(real_files) == 0 or len(fake_files) == 0:
+        print("Lỗi: Không tìm thấy file âm thanh nào trong test_unseen!")
     else:
-        # 3. CHỌN NGẪU NHIÊN mỗi bên 1 file
-        random_real = random.choice(bonafide_files)
-        random_fake = random.choice(spoof_files)
+        # CHỌN NGẪU NHIÊN mỗi bên 1 file từ test_unseen
+        random_real = random.choice(real_files)
+        random_fake = random.choice(fake_files)
         
-        # 4. In ra tên file để bạn dễ theo dõi
-        print(f"Đang bốc thăm ngẫu nhiên...")
-        print(f"File Thật được chọn: {random_real.name}")
-        print(f"File Giả được chọn:  {random_fake.name}\n")
+        # In ra tên file để bạn dễ theo dõi
+        print(f"Đang bốc thăm ngẫu nhiên từ test_unseen...")
+        print(f"File Thật được chọn: {Path(random_real).name}")
+        print(f"File Giả được chọn:  {Path(random_fake).name}\n")
         
         try:
             # Tiến hành dự đoán
-            predict(str(random_real))
-            predict(str(random_fake))
+            predict(random_real)
+            predict(random_fake)
         except Exception as e:
             print(f"Lỗi khi dự đoán: {e}")

@@ -4,29 +4,44 @@ import torch
 import torch.nn.functional as F
 from pathlib import Path
 import numpy as np
+import pandas as pd
 
 TARGET_LENGTH = 80000
 
 
 class AudioDataset(Dataset):
+    """
+    Load audio files từ vispoofdb/data/clean_data/ theo metadata.csv
+    Filter theo split: train / test_seen / test_unseen
+    """
 
-    def __init__(self, root_dir):
-
+    def __init__(self, metadata_path: str, split: str = "train"):
+        """
+        Args:
+            metadata_path: Đường dẫn tới metadata.csv
+            split: "train", "test_seen", hoặc "test_unseen"
+        """
+        self.split = split
         self.files = []
 
-        bonafide_files = list(
-            Path(root_dir, "bonafide").glob("*.wav")
-        )
+        # Đọc metadata
+        df = pd.read_csv(metadata_path)
 
-        spoof_files = list(
-            Path(root_dir, "spoof").glob("*.wav")
-        )
+        # Filter theo split
+        df = df[df["split"] == split]
 
-        for file in bonafide_files:
-            self.files.append((str(file), 0))
+        # Đường dẫn base (thư mục chứa metadata)
+        base_dir = Path(metadata_path).parent
 
-        for file in spoof_files:
-            self.files.append((str(file), 1))
+        # Load file paths và labels
+        for _, row in df.iterrows():
+            file_path = base_dir / row["file_path"]
+            label = 0 if row["label"] == "real" else 1
+
+            if file_path.exists():
+                self.files.append((str(file_path), label))
+
+        print(f"[{split}] Loaded {len(self.files)} files")
 
     def __len__(self):
         return len(self.files)
