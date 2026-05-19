@@ -1,6 +1,7 @@
 import sys
 import os
 import pandas as pd
+import numpy as np
 from pathlib import Path
 
 # Fix encoding cho terminal Windows
@@ -12,6 +13,7 @@ if sys.stderr.encoding != 'utf-8':
 # ════════════════════════════════════════════════════════════════
 #  Tao lai metadata.csv cho vispoofdb/data/clean_data/
 #  Xu ly ca real (file truc tiep) va fake (co thu muc con)
+#  DA FIX DATA LEAKAGE (SPEAKER-INDEPENDENT)
 # ════════════════════════════════════════════════════════════════
 
 BASE_DIR = Path(__file__).resolve().parents[2]
@@ -32,6 +34,7 @@ TECHNIQUE_MAP = {
 }
 
 # ── Cac source la UNSEEN (chi dung test)
+# LƯU Ý: Bạn có thể thêm "elevenlabs" hoặc "zaloai" vào đây nếu muốn
 UNSEEN_SOURCES = {"gtts"}
 
 # ── Source mac dinh cho thu muc real (khong co thu muc con)
@@ -134,29 +137,44 @@ def collect_fake(fake_dir: Path, clean_data_root: Path) -> list[dict]:
 
 def assign_splits(df: pd.DataFrame) -> pd.DataFrame:
     """
-    Split strategy:
-    - Real: 60% train, 20% test_seen, 20% test_unseen (different speakers)
+    Split strategy (FIXED SPEAKER LEAKAGE):
+    - Real: 60% train, 20% test_seen, 20% test_unseen (chia theo SPEAKER độc lập)
     - Fake gtts: 100% test_unseen (completely new technique)
     - Fake others: 80% train, 20% test_seen
     """
     result_parts = []
 
-    # ── REAL: 60/20/20 split
+    # ── REAL: 60/20/20 split (FIX LEAKAGE Ở ĐÂY)
     if "real" in df["label"].unique():
         real_df = df[df["label"] == "real"].copy()
-        shuffled = real_df.sample(frac=1, random_state=42)
         
-        n = len(shuffled)
-        train_cut = int(n * 0.60)
-        test_seen_cut = train_cut + int(n * 0.20)
+        # 1. Trích xuất danh sách người nói (VD: VIVOSDEV01)
+        # Tạo tạm một series chứa các speaker ID độc nhất
+        unique_speakers = pd.Series(real_df["file_id"].apply(lambda x: x.split('_')[0]).unique())
         
-        real_df.loc[shuffled.index[:train_cut], "split"] = "train"
-        real_df.loc[shuffled.index[train_cut:test_seen_cut], "split"] = "test_seen"
-        real_df.loc[shuffled.index[test_seen_cut:], "split"] = "test_unseen"
+        # 2. Xáo trộn DANH SÁCH NGƯỜI NÓI (Cố định random_state=42 để kết quả không đổi)
+        shuffled_speakers = unique_speakers.sample(frac=1, random_state=42).tolist()
         
+        # 3. Tính toán số lượng người nói cho từng tập
+        n_spk = len(shuffled_speakers)
+        train_cut = int(n_spk * 0.60)
+        test_seen_cut = train_cut + int(n_spk * 0.20)
+        
+        train_spk = set(shuffled_speakers[:train_cut])
+        test_seen_spk = set(shuffled_speakers[train_cut:test_seen_cut])
+        # Phần còn lại tự động thuộc test_unseen
+        
+        # 4. Gán nhãn cho file dựa vào người nói thuộc tập nào
+        def map_real_split(file_id):
+            spk = file_id.split('_')[0]
+            if spk in train_spk: return "train"
+            elif spk in test_seen_spk: return "test_seen"
+            else: return "test_unseen"
+            
+        real_df["split"] = real_df["file_id"].apply(map_real_split)
         result_parts.append(real_df)
 
-    # ── FAKE: Handle gtts vs others separately
+    # ── FAKE: Handle gtts vs others separately (GIỮ NGUYÊN LOGIC CỦA BẠN)
     if "fake" in df["label"].unique():
         fake_df = df[df["label"] == "fake"].copy()
         
