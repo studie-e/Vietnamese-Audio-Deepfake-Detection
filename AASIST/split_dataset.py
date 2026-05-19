@@ -11,7 +11,7 @@ from pathlib import Path
 
 random.seed(42)
 
-REAL_SOURCE = "dataset/real"
+REAL_SOURCE = "dataset/real_new"
 FAKE_SOURCE = "dataset/fake"
 
 OUTPUT_DIR = "dataset"
