@@ -43,7 +43,7 @@ def process_all_data():
     print(df.groupby(['label', 'split']).size().to_string())
     print()
 
-    X, y, splits = [], [], []
+    X, y, splits, paths = [], [], [], []
 
     for _, row in tqdm(df.iterrows(), total=len(df), desc="Trích xuất MFCC SVM"):
         file_path = CLEAN_DATA_DIR / row['file_path']
@@ -59,10 +59,12 @@ def process_all_data():
             X.append(feat)
             y.append(label)
             splits.append(split)
+            paths.append(row['file_path'])
 
     X = np.array(X)
     y = np.array(y)
     splits = np.array(splits)
+    paths = np.array(paths)
 
     print(f"\nXong! Tổng cộng {len(X)} file đã được xử lý.")
     print(f"Phân phối splits: {dict(zip(*np.unique(splits, return_counts=True)))}")
@@ -70,8 +72,9 @@ def process_all_data():
     np.save(SAVE_DIR / 'X_all.npy', X)
     np.save(SAVE_DIR / 'y_all.npy', y)
     np.save(SAVE_DIR / 'splits_svm.npy', splits)
+    np.save(SAVE_DIR / 'paths_svm.npy', paths)
     print(f"Đã lưu tại: {SAVE_DIR}")
-    print("  X_all.npy, y_all.npy, splits_svm.npy")
+    print("  X_all.npy, y_all.npy, splits_svm.npy, paths_svm.npy")
 
 if __name__ == "__main__":
     process_all_data()

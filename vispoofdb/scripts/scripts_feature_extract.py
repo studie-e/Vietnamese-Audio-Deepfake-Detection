@@ -14,12 +14,17 @@ Thứ tự thực hiện:
                               (phụ thuộc vidb_extract_mfcc.py đã chạy)
     5. wav2vec2.py          — Wav2Vec2 768 chiều       → features_wav2vec/
                               (mất ~1 giờ trên CPU)
+    6. tone_features.py     — Tone-Aware 24 chiều      → features_model/tone/
+                              (F0/pitch contour, jitter, shimmer, HNR, ...)
 
 Cách chạy (từ thư mục gốc dự án):
     python vispoofdb/scripts/scripts_feature_extract.py
 
     Bỏ Wav2Vec2 nếu không cần (tiết kiệm thời gian):
     python vispoofdb/scripts/scripts_feature_extract.py --skip-wav2vec
+
+    Bỏ Wav2Vec2 và Tone-Aware:
+    python vispoofdb/scripts/scripts_feature_extract.py --skip-wav2vec --skip-tone
 """
 
 import subprocess
@@ -35,32 +40,38 @@ DATA_MODEL_DIR = BASE_DIR / "vispoofdb" / "data_model"
 PYTHON         = sys.executable
 
 SKIP_WAV2VEC = "--skip-wav2vec" in sys.argv
+SKIP_TONE    = "--skip-tone"    in sys.argv
 
 PIPELINE = [
     (
         DATA_MODEL_DIR / "lfcc_svm.py",
-        "Bước 1/5 — Trích xuất LFCC (40 chiều) → features_lfcc/",
+        "Bước 1/6 — Trích xuất LFCC (40 chiều) → features_lfcc/",
         False,  # skip?
     ),
     (
         DATA_MODEL_DIR / "svm_features.py",
-        "Bước 2/5 — Trích xuất MFCC mean (40 chiều, SVM) → features_model/svm/",
+        "Bước 2/6 — Trích xuất MFCC mean (40 chiều, SVM) → features_model/svm/",
         False,
     ),
     (
         DATA_MODEL_DIR / "mlp_features.py",
-        "Bước 3/5 — Trích xuất MFCC mean (40 chiều, MLP) → features_model/MLP/",
+        "Bước 3/6 — Trích xuất MFCC mean (40 chiều, MLP) → features_model/MLP/",
         False,
     ),
     (
         DATA_MODEL_DIR / "xgboost_features.py",
-        "Bước 4/5 — Trích xuất MFCC + Delta (480 chiều, XGBoost) → features_model/xgb/",
+        "Bước 4/6 — Trích xuất MFCC + Delta (480 chiều, XGBoost) → features_model/xgb/",
         False,
     ),
     (
         DATA_MODEL_DIR / "wav2vec2.py",
-        "Bước 5/5 — Trích xuất Wav2Vec2 (768 chiều) → features_wav2vec/ [~1 GIỜ]",
+        "Bước 5/6 — Trích xuất Wav2Vec2 (768 chiều) → features_wav2vec/ [~1 GIỜ]",
         SKIP_WAV2VEC,
+    ),
+    (
+        DATA_MODEL_DIR / "tone_features.py",
+        "Bước 6/6 — Trích xuất Tone-Aware (24 chiều) → features_model/tone/",
+        SKIP_TONE,
     ),
 ]
 
@@ -100,6 +111,8 @@ def main():
     print("  VISPOOFDB — FEATURE EXTRACTION PIPELINE")
     if SKIP_WAV2VEC:
         print("  [--skip-wav2vec] Bỏ qua Wav2Vec2 extraction")
+    if SKIP_TONE:
+        print("  [--skip-tone]    Bỏ qua Tone-Aware extraction")
     separator()
     print()
 

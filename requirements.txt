@@ -14,3 +14,4 @@ spafe
 scipy
 shap
 matplotlib
+soundfile

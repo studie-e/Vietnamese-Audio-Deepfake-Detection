@@ -7,12 +7,16 @@ Yêu cầu trước:
     - Đã chạy scripts_feature_extract.py (có đủ các file features_*.npy)
 
 Thứ tự thực hiện:
-    1. train_lfcc_svm.py   — SVM trên LFCC         → svm_lfcc_model.pkl
-    2. train_svm.py        — SVM trên MFCC          → svm_voice_model.pkl
-    3. train_mlp.py        — MLP trên MFCC          → best_mlp.pkl
-    4. train_xgboost.py    — XGBoost                → best_xgboost.pkl
-    5. train_wav2vec.py    — MLP trên Wav2Vec2       → mlp_wav2vec_model.pkl
-                             (bỏ qua nếu chưa trích xuất Wav2Vec2)
+    1. train_lfcc_svm.py      — SVM trên LFCC              → svm_lfcc_model.pkl
+    2. train_svm.py           — SVM trên MFCC               → svm_voice_model.pkl
+    3. train_mlp.py           — MLP trên MFCC               → best_mlp.pkl
+    4. train_xgboost.py       — XGBoost trên MFCC-Delta     → best_xgboost.pkl
+    5. train_wav2vec.py       — MLP trên Wav2Vec2            → mlp_wav2vec_model.pkl
+                                (bỏ qua nếu chưa trích xuất Wav2Vec2)
+    6. train_tone_svm.py      — SVM trên Tone-Aware (24d)   → svm_tone_model.pkl
+    7. train_tone_xgboost.py  — XGBoost trên Tone-Aware     → xgboost_tone_model.pkl
+    8. train_tone_fusion.py   — SVM + MFCC+Tone Fusion (64d)→ svm_tone_fusion_model.pkl
+                                (bỏ qua nếu chưa trích xuất Tone-Aware features)
 
 Đánh giá:
     Mỗi mô hình sẽ in kết quả trên 2 tập:
@@ -24,6 +28,9 @@ Cách chạy (từ thư mục gốc dự án):
 
     Bỏ Wav2Vec2 nếu chưa trích xuất:
     python vispoofdb/scripts/scripts_train.py --skip-wav2vec
+
+    Bỏ cả Wav2Vec2 lẫn Tone models:
+    python vispoofdb/scripts/scripts_train.py --skip-wav2vec --skip-tone
 """
 
 import subprocess
@@ -39,6 +46,7 @@ MODELS_DIR  = BASE_DIR / "vispoofdb" / "models"
 PYTHON      = sys.executable
 
 SKIP_WAV2VEC = "--skip-wav2vec" in sys.argv
+SKIP_TONE    = "--skip-tone"    in sys.argv
 
 # Kiểm tra Wav2Vec2 features tồn tại để tự động bỏ qua nếu chưa có
 wav2vec_features = BASE_DIR / "vispoofdb" / "data" / "features_wav2vec" / "X_wav2vec.npy"
@@ -47,31 +55,53 @@ if not wav2vec_features.exists() and not SKIP_WAV2VEC:
     print("       (Chạy scripts_feature_extract.py trước để có Wav2Vec2 features)\n")
     SKIP_WAV2VEC = True
 
+# Kiểm tra Tone-Aware features tồn tại để tự động bỏ qua nếu chưa có
+tone_features = BASE_DIR / "vispoofdb" / "data" / "features_model" / "tone" / "X_tone.npy"
+if not tone_features.exists() and not SKIP_TONE:
+    print("[INFO] Chưa tìm thấy features_model/tone/X_tone.npy — tự động bỏ qua các Tone models")
+    print("       (Chạy: python vispoofdb/data_model/tone_features.py trước)\n")
+    SKIP_TONE = True
+
 PIPELINE = [
     (
         MODELS_DIR / "train_lfcc_svm.py",
-        "Bước 1/5 — SVM + LFCC",
+        "Bước 1/8 — SVM + LFCC",
         False,
     ),
     (
         MODELS_DIR / "train_svm.py",
-        "Bước 2/5 — SVM + MFCC",
+        "Bước 2/8 — SVM + MFCC",
         False,
     ),
     (
         MODELS_DIR / "train_mlp.py",
-        "Bước 3/5 — MLP + MFCC",
+        "Bước 3/8 — MLP + MFCC",
         False,
     ),
     (
         MODELS_DIR / "train_xgboost.py",
-        "Bước 4/5 — XGBoost + MFCC-Delta",
+        "Bước 4/8 — XGBoost + MFCC-Delta",
         False,
     ),
     (
         MODELS_DIR / "train_wav2vec.py",
-        "Bước 5/5 — MLP + Wav2Vec2 (768 chiều)",
+        "Bước 5/8 — MLP + Wav2Vec2 (768 chiều)",
         SKIP_WAV2VEC,
+    ),
+    (
+        MODELS_DIR / "train_tone_svm.py",
+        "Bước 6/8 — SVM + Tone-Aware (24 chiều)",
+        SKIP_TONE,
+    ),
+    (
+        MODELS_DIR / "train_tone_xgboost.py",
+        "Bước 7/8 — XGBoost + Tone-Aware (24 chiều)",
+        SKIP_TONE,
+    ),
+    (
+        MODELS_DIR / "train_tone_fusion.py",
+        "Bước 8/8 — SVM + MFCC+Tone Fusion (64 chiều)",
+        SKIP_TONE,
     ),
 ]
 
@@ -111,6 +141,8 @@ def main():
     print("  VISPOOFDB — MODEL TRAINING PIPELINE")
     if SKIP_WAV2VEC:
         print("  [skip] train_wav2vec.py — Wav2Vec2 features chưa có")
+    if SKIP_TONE:
+        print("  [skip] train_tone_*.py  — Tone-Aware features chưa có")
     separator()
     print()
 
