@@ -4,4 +4,24 @@
 __pycache__/
 .env
 keys.py
+*.pyc
+.venv/
 
+# ========================
+# Data & Model files (quá lớn cho GitHub)
+# ========================
+*.npy
+*.pkl
+*.h5
+*.pt
+*.pth
+
+# Thư mục dữ liệu trung gian (feature files - quá lớn)
+data/features_*/
+data/clean_data/
+vispoofdb/data/features_*/
+vispoofdb/data/clean_data/
+
+# Thư mục lưu model đã train
+models_saved/
+vispoofdb/models_saved/

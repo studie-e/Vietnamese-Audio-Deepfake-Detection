@@ -5,7 +5,7 @@ import joblib # Thư viện chuẩn để lưu model scikit-learn
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler
 from sklearn.neural_network import MLPClassifier
-from sklearn.metrics import accuracy_score, classification_report
+from sklearn.metrics import accuracy_score, classification_report, roc_curve
 
 # Định nghĩa đường dẫn
 FEATURES_DIR = "data/features_model/MLP"
@@ -59,9 +59,17 @@ def train_model():
     # Đánh giá trên tập test
     print("\nEvaluating model...")
     y_pred = mlp_model.predict(X_test_scaled)
+    y_pred_proba = mlp_model.predict_proba(X_test_scaled)[:, 1]  # Lấy probability của class 1
+    
+    # Tính EER (Equal Error Rate)
+    fpr, tpr, thresholds = roc_curve(y_test, y_pred_proba)
+    fnr = 1 - tpr
+    eer_idx = np.argmin(np.abs(fpr - fnr))
+    eer = fpr[eer_idx]
     
     acc = accuracy_score(y_test, y_pred)
     print(f"Accuracy on Test Set: {acc * 100:.2f}%")
+    print(f"EER (Equal Error Rate): {eer * 100:.2f}%")
     
     print("\nClassification Report:")
     # 0 = Real, 1 = AI

@@ -4,7 +4,7 @@ import joblib
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler
 from sklearn.svm import SVC
-from sklearn.metrics import accuracy_score, classification_report, confusion_matrix
+from sklearn.metrics import accuracy_score, classification_report, confusion_matrix, roc_curve
 
 # --- 1. Load dữ liệu LFCC ---
 LOAD_DIR = 'data/features_lfcc'
@@ -33,10 +33,18 @@ model.fit(X_train_scaled, y_train)
 # --- 5. Đánh giá trực tiếp trên tập Val ---
 print("\n--- KẾT QUẢ BÀI THI TRÊN TẬP VALIDATION (20%) ---")
 y_pred = model.predict(X_val_scaled)
+y_pred_proba = model.predict_proba(X_val_scaled)[:, 1]  # Lấy probability của class 1
+
+# Tính EER (Equal Error Rate)
+fpr, tpr, thresholds = roc_curve(y_val, y_pred_proba)
+fnr = 1 - tpr
+eer_idx = np.argmin(np.abs(fpr - fnr))
+eer = fpr[eer_idx]
 
 acc = accuracy_score(y_val, y_pred)
 print("=" * 50)
 print(f"🚀 ĐỘ CHÍNH XÁC (ACCURACY): {acc * 100:.2f}%")
+print(f"📊 EER (Equal Error Rate): {eer * 100:.2f}%")
 print("=" * 50)
 
 print("\nBÁO CÁO CHI TIẾT (Classification Report):")

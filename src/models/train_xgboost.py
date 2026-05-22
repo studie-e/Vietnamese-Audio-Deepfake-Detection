@@ -2,7 +2,7 @@ import os
 import numpy as np
 import xgboost as xgb
 from sklearn.model_selection import train_test_split, RandomizedSearchCV, StratifiedKFold
-from sklearn.metrics import classification_report, accuracy_score, ConfusionMatrixDisplay
+from sklearn.metrics import classification_report, accuracy_score, ConfusionMatrixDisplay, roc_curve, precision_score, recall_score, f1_score
 import matplotlib.pyplot as plt
 import joblib
 
@@ -129,6 +129,26 @@ if (train_acc - test_acc) > 0.10:
     print("Cảnh báo: Mô hình vẫn còn dấu hiệu Overfitting (Gap > 10%).")
 else:
     print("Chúc mừng: Mô hình có tính tổng quát hóa tốt (Generalization).")
+
+# Tính thêm các metrics: Precision, Recall, F1-Score và EER
+y_pred_proba = final_model.predict_proba(X_test)[:, 1]  # Lấy probability của class 1 (Fake)
+
+precision = precision_score(y_test, y_test_pred)
+recall = recall_score(y_test, y_test_pred)
+f1 = f1_score(y_test, y_test_pred)
+
+# Tính EER (Equal Error Rate)
+fpr, tpr, thresholds = roc_curve(y_test, y_pred_proba)
+fnr = 1 - tpr
+eer_idx = np.argmin(np.abs(fpr - fnr))
+eer = fpr[eer_idx]
+
+print("\n" + "="*50)
+print(f"PRECISION: {precision * 100:.2f}%")
+print(f"RECALL   : {recall * 100:.2f}%")
+print(f"F1-SCORE : {f1 * 100:.2f}%")
+print(f"EER      : {eer * 100:.2f}%")
+print("="*50)
 
 # Lưu ma trận nhầm lẫn để phân tích sâu hơn
 ConfusionMatrixDisplay.from_estimator(final_model, X_test, y_test, display_labels=['Real', 'Fake'])
