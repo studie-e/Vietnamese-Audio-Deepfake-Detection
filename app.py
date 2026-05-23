@@ -7,7 +7,7 @@ import joblib
 import torch
 from transformers import Wav2Vec2Processor, Wav2Vec2Model
 from src.data_processing.ensemble_system import VietGuardEnsemble
-from src.xai.shap_explainer import AudioXAIExplainer, extract_all_features
+from vispoofdb.xai import VispoofdbAudioXAI
 from src.xai.visualizer import (
     plot_waterfall,
     plot_ensemble_weights,
@@ -136,11 +136,11 @@ def load_system(use_single=False):
         if not os.path.exists(model_p) or not os.path.exists(scaler_p):
             raise FileNotFoundError("Không tìm thấy svm_on_wav2vec model/scaler trong vispoofdb/experiments/")
         det = SingleWav2VecDetector(model_p, scaler_p)
-        xai = None
+        xai = VispoofdbAudioXAI(det, n_background=8)
         return det, xai
     else:
         ens = VietGuardEnsemble(models_dir="vispoofdb/models_saved")
-        xai = AudioXAIExplainer(ens, n_background=10)  # 10 bg samples: nhanh, đủ tốt
+        xai = VispoofdbAudioXAI(ens, n_background=8)  # đủ nhanh cho demo
         return ens, xai
 
 with st.spinner("⏳ Đang khởi động hệ thống AI…"):
@@ -204,9 +204,8 @@ if uploaded_file:
         # ── XAI (tuỳ chọn) ───────────────────────────────────────────────
         xai_results = None
         if run_xai and result.get("success"):
-            with st.spinner("🔬 Đang tính SHAP — lần đầu ~15s, lần sau <5s…"):
-                feats       = extract_all_features(detector, y_audio, sr_audio)
-                xai_results = explainer.explain(feats)
+            with st.spinner("🔬 Đang tính SHAP — lần đầu có thể mất 15–40 giây…"):
+                xai_results = explainer.explain(y_audio, sr_audio)
 
         # ── Hiển thị ─────────────────────────────────────────────────────
         if not result.get("success"):
@@ -216,7 +215,7 @@ if uploaded_file:
         prob    = result["confidence_ai"]
         is_fake = result["is_fake"]
         details = result["details"]
-        model_names = ["LFCC+SVM", "Wav2Vec+MLP", "MFCC+SVM", "XGBoost", "MFCC+MLP"]
+        model_names = ["SVM + Wav2Vec2"] if len(details) == 1 else ["LFCC+SVM", "Wav2Vec+MLP", "MFCC+SVM", "XGBoost", "MFCC+MLP"]
 
         # ── Tabs ─────────────────────────────────────────────────────────
         tab_detect, tab_xai = st.tabs(["Kết quả Phát hiện", "Giải thích XAI (SHAP)"])
@@ -258,13 +257,26 @@ if uploaded_file:
 
             summary = xai_results.get("_ensemble_summary", {})
 
-            # ── Ensemble overview — XÁC SUẤT THỰC của từng model ────────────
-            st.markdown("### ⚖️ Phiếu bầu của từng Model")
-            st.caption("Mỗi model độc lập dự đoán xác suất AI — kết quả cuối là trung bình cộng.")
+            if summary.get("model_weights"):
+                st.markdown("### 🧭 Tổng quan XAI")
+                left_sum, right_sum = st.columns([1, 1])
+                with left_sum:
+                    st.markdown("**Nhận xét tự động:**")
+                    for note in summary.get("notes", []):
+                        st.markdown(f"- {note}")
+                with right_sum:
+                    fig_weights = plot_ensemble_weights(summary)
+                    st.pyplot(fig_weights, use_container_width=True)
 
-            vote_cols = st.columns(5)
-            model_names_ordered = ["LFCC+SVM", "Wav2Vec+MLP", "MFCC+SVM", "XGBoost", "MFCC+MLP"]
-            for col, name, val in zip(vote_cols, model_names_ordered, details):
+            # ── Ensemble overview — XÁC SUẤT THỰC của từng model ────────────
+            st.markdown("### ⚖️ Phiếu bầu / xác suất đầu ra")
+            if len(details) > 1:
+                st.caption("Mỗi model độc lập dự đoán xác suất AI — kết quả cuối là trung bình cộng.")
+            else:
+                st.caption("Chế độ single-model: hiển thị xác suất từ mô hình Wav2Vec2 + SVM.")
+
+            vote_cols = st.columns(len(details))
+            for col, name, val in zip(vote_cols, model_names, details):
                 verdict_label = "🔴 AI" if val >= 0.5 else "🟢 Real"
                 bg     = "#3B1A1A" if val >= 0.5 else "#1A3B1A"
                 border = "#F87171" if val >= 0.5 else "#4ADE80"
@@ -282,35 +294,50 @@ if uploaded_file:
 
             avg        = sum(details) / len(details)
             votes_fake = sum(1 for v in details if v >= 0.5)
+            denom = len(details)
+            vote_phrase = f"{votes_fake}/{denom} model vote AI" if denom > 1 else "Single model output"
             st.markdown(f"""
             <div style="background:#1E293B;border-radius:10px;padding:0.9rem 1.4rem;
                         margin-top:0.8rem;border:1px solid #334155;text-align:center;">
-            <code>({' + '.join(f'{v:.2f}' for v in details)}) ÷ 5 = <b>{avg:.3f}</b></code>
+            <code>({' + '.join(f'{v:.2f}' for v in details)}) ÷ {denom} = <b>{avg:.3f}</b></code>
             &nbsp;→&nbsp;
             <b style="color:{'#EF4444' if avg>=0.5 else '#22C55E'}">
             {'🚨 AI (≥ 0.5)' if avg >= 0.5 else '✅ Real (< 0.5)'}
             </b>
             &nbsp;&nbsp;|&nbsp;&nbsp;
-            <b>{votes_fake}/5 model vote AI</b>
+            <b>{vote_phrase}</b>
             </div>
             """, unsafe_allow_html=True)
 
             st.divider()
 
             # ── XGBoost SHAP — phần duy nhất đáng tin cậy ────────────────────
-            st.markdown("### 🌲 Giải thích đặc trưng — XGBoost (TreeSHAP)")
-            st.markdown("""
-            <div class="note-box">
-            ✅ <b>XGBoost dùng TreeSHAP</b> — phương pháp SHAP chính xác nhất, tính toán
-            đúng đóng góp của từng feature MFCC vào quyết định của model XGBoost.<br>
-            🔴 Bar đỏ = feature đẩy về phía AI &nbsp;|&nbsp;
-            🟢 Bar xanh = feature đẩy về phía Real &nbsp;|&nbsp;
-            Dashed line = điểm gốc (base value)
-            </div>
-            """, unsafe_allow_html=True)
+            xai_model_key = "XGBoost" if "XGBoost" in xai_results else ("Wav2Vec2" if "Wav2Vec2" in xai_results else None)
+            if xai_model_key == "XGBoost":
+                st.markdown("### 🌲 Giải thích đặc trưng — XGBoost (TreeSHAP)")
+                st.markdown("""
+                <div class="note-box">
+                ✅ <b>XGBoost dùng TreeSHAP</b> — phương pháp SHAP chính xác nhất, tính toán
+                đúng đóng góp của từng feature MFCC vào quyết định của model XGBoost.<br>
+                🔴 Bar đỏ = feature đẩy về phía AI &nbsp;|&nbsp;
+                🟢 Bar xanh = feature đẩy về phía Real &nbsp;|&nbsp;
+                Dashed line = điểm gốc (base value)
+                </div>
+                """, unsafe_allow_html=True)
+            elif xai_model_key == "Wav2Vec2":
+                st.markdown("### 🎧 Giải thích đặc trưng — Wav2Vec2 (KernelSHAP)")
+                st.markdown("""
+                <div class="note-box">
+                ✅ <b>Wav2Vec2 dùng KernelSHAP</b> — các chiều embedding được gom theo cụm 64 chiều
+                để biểu đồ dễ đọc hơn.<br>
+                🔴 Bar đỏ = chiều/nhóm đẩy về phía AI &nbsp;|&nbsp;
+                🟢 Bar xanh = chiều/nhóm đẩy về phía Real &nbsp;|&nbsp;
+                Dashed line = điểm gốc (base value)
+                </div>
+                """, unsafe_allow_html=True)
 
-            xgb_res = xai_results.get("XGBoost")
-            if xgb_res:
+            if xai_model_key:
+                xgb_res = xai_results.get(xai_model_key)
                 sv_sum   = float(np.sum(xgb_res["shap_values"]))
                 base     = xgb_res["base_value"]
                 logit    = base + sv_sum          # log-odds (raw SHAP output)
@@ -342,4 +369,4 @@ if uploaded_file:
                             f"{bar_color} `{t['shap_value']:+.4f}`"
                         )
             else:
-                st.warning("Không tìm thấy kết quả XGBoost SHAP.")
+                st.warning("Không tìm thấy kết quả SHAP phù hợp cho mẫu này.")
