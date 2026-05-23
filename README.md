@@ -71,3 +71,31 @@ Kết quả mẫu (từ lần chạy gần nhất) — metric chính: EER trên 
 Xem chi tiết đầy đủ tại: [vispoofdb/experiments/results_summary.csv](vispoofdb/experiments/results_summary.csv#L1).
 
 # Vietnamese-Audio-Deepfake-Detection
+
+## New / Utility Scripts
+
+- **Noise evaluation**: `vispoofdb/scripts/eval_noise_augmentation.py` — generate noisy/codec variants (phone/Zalo/voice-message/background noise/telephone bandpass/mp3 roundtrip) and evaluate detectors (`single`, `ensemble`, `aasist`).
+	- Important CLI flags: `--n-samples`, `--model-type` (`single|ensemble|aasist`), `--augmentor` (`audiomentations|simple`), `--aasist-root`, `--aasist-checkpoint`, `--keep-noisy`.
+	- Example (single model, 200 samples, audiomentations scenarios):
+
+```bash
+python vispoofdb/scripts/eval_noise_augmentation.py --n-samples 200 --model-type single --augmentor audiomentations
+```
+
+- **Quantize & prune**: `vispoofdb/scripts/quantize.py` — benchmark and apply L1 pruning + INT8 dynamic quantization, export TorchScript and save JSON summary.
+	- By default the script will prefer the local `AASIST.models.baseline.Full_AASIST_Model` if `AASIST/` is present.
+	- Example (benchmark AASIST checkpoint):
+
+```bash
+python vispoofdb/scripts/quantize.py --model-path AASIST/aasist_best_model.pth --n-benchmark 50 --use-test-samples
+```
+
+## Notes / Requirements for the new scripts
+- `audiomentations` (optional): `pip install audiomentations` — enables advanced simulated network/codec scenarios.
+- `ffmpeg` (optional but recommended): required for codec round-trip (MP3/AAC) augmentations. Install and make available on PATH (Windows: download ffmpeg.org or use choco/scoop).
+- If you plan to run `--model-type aasist`, provide a valid checkpoint with `--aasist-checkpoint` and ensure `AASIST/` is present for local model class imports.
+
+## Recent changes
+- Added `vispoofdb/scripts/eval_noise_augmentation.py` (noise robustness evaluation).
+- Added `vispoofdb/scripts/quantize.py` (prune + quantize + TorchScript export).
+- `app.py` now falls back to a single-model detector when ensemble artifacts are missing.
