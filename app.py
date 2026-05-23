@@ -3,6 +3,9 @@ import os
 import tempfile
 import librosa
 import numpy as np
+import joblib
+import torch
+from transformers import Wav2Vec2Processor, Wav2Vec2Model
 from src.data_processing.ensemble_system import VietGuardEnsemble
 from src.xai.shap_explainer import AudioXAIExplainer, extract_all_features
 from src.xai.visualizer import (
@@ -83,15 +86,76 @@ st.markdown("""
 </div>
 """, unsafe_allow_html=True)
 
+# ── Inference mode selector ─────────────────────────────────────────────────
+mode = st.selectbox("Chế độ inference:", ["Ensemble (5 models)", "Single model — SVM Wav2Vec"]) 
+
+
+# ── Helper: single-model wrapper ────────────────────────────────────────────
+class SingleWav2VecDetector:
+    def __init__(self, model_path, scaler_path):
+        self.model = joblib.load(model_path)
+        self.scaler = joblib.load(scaler_path)
+        self.processor = Wav2Vec2Processor.from_pretrained("facebook/wav2vec2-base")
+        self.w2v_model = Wav2Vec2Model.from_pretrained("facebook/wav2vec2-base")
+        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        self.w2v_model.to(self.device)
+
+    def _extract_wav2vec(self, y, sr):
+        inputs = self.processor(y, sampling_rate=sr, return_tensors="pt").to(self.device)
+        with torch.no_grad():
+            outputs = self.w2v_model(**inputs)
+            features = outputs.last_hidden_state.mean(dim=1).squeeze().cpu().numpy()
+        return features.reshape(1, -1)
+
+    def predict_audio(self, file_path):
+        y, sr = librosa.load(file_path, sr=16000)
+        feat = self._extract_wav2vec(y, sr)
+        try:
+            if hasattr(self.model, "predict_proba"):
+                p = float(self.model.predict_proba(self.scaler.transform(feat))[0][1])
+            else:
+                # fallback to decision_function then sigmoid
+                df = float(self.model.decision_function(self.scaler.transform(feat))[0])
+                p = 1.0 / (1.0 + np.exp(-df))
+            return {
+                "success": True,
+                "is_fake": bool(p >= 0.5),
+                "confidence_ai": float(p),
+                "details": [float(p)],
+            }
+        except Exception as e:
+            return {"success": False, "error": str(e)}
+
+
 # ── Load models ──────────────────────────────────────────────────────────────
 @st.cache_resource(show_spinner=False)
-def load_system():
-    ens = VietGuardEnsemble(models_dir="models_saved")
-    xai = AudioXAIExplainer(ens, n_background=10)  # 10 bg samples: nhanh, đủ tốt
-    return ens, xai
+def load_system(use_single=False):
+    if use_single:
+        model_p = os.path.join("vispoofdb", "experiments", "svm_on_wav2vec.pkl")
+        scaler_p = os.path.join("vispoofdb", "experiments", "svm_on_wav2vec_scaler.pkl")
+        if not os.path.exists(model_p) or not os.path.exists(scaler_p):
+            raise FileNotFoundError("Không tìm thấy svm_on_wav2vec model/scaler trong vispoofdb/experiments/")
+        det = SingleWav2VecDetector(model_p, scaler_p)
+        xai = None
+        return det, xai
+    else:
+        ens = VietGuardEnsemble(models_dir="vispoofdb/models_saved")
+        xai = AudioXAIExplainer(ens, n_background=10)  # 10 bg samples: nhanh, đủ tốt
+        return ens, xai
 
 with st.spinner("⏳ Đang khởi động hệ thống AI…"):
-    detector, explainer = load_system()
+    try:
+        if mode.startswith("Single"):
+            detector, explainer = load_system(use_single=True)
+        else:
+            detector, explainer = load_system(use_single=False)
+    except FileNotFoundError as e:
+        st.warning(f"Một hoặc nhiều model ensemble bị thiếu: {e}. Chuyển sang Single model nếu có.")
+        try:
+            detector, explainer = load_system(use_single=True)
+        except Exception as e2:
+            st.error(f"Không thể khởi tạo hệ thống: {e2}")
+            raise
 
 st.success("Hệ thống đã sẵn sàng — upload file để bắt đầu phân tích!")
 st.divider()
