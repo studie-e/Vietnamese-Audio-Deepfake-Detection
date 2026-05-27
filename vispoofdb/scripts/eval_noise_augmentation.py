@@ -127,6 +127,136 @@ class SingleWav2VecDetector:
         return {"success": True, "is_fake": bool(p >= 0.5), "confidence_ai": float(p)}
 
 
+class SklearnDetector:
+    """Wrapper for sklearn models (SVM, XGBoost, MLP)."""
+    def __init__(self, model_path, scaler_path, feature_extractor):
+        self.model = joblib.load(model_path)
+        self.scaler = joblib.load(scaler_path) if scaler_path and Path(scaler_path).exists() else None
+        self.feature_extractor = feature_extractor
+    
+    def predict_audio(self, file_path):
+        try:
+            y, sr = librosa.load(file_path, sr=16000)
+            features = self.feature_extractor(y, sr)
+            
+            if self.scaler:
+                features = self.scaler.transform(features.reshape(1, -1))
+            else:
+                features = features.reshape(1, -1)
+            
+            if hasattr(self.model, 'predict_proba'):
+                p = float(self.model.predict_proba(features)[0][1])
+            else:
+                p_score = float(self.model.decision_function(features)[0])
+                p = 1.0 / (1.0 + np.exp(-p_score))
+            
+            return {"success": True, "is_fake": bool(p >= 0.5), "confidence_ai": float(p)}
+        except Exception as e:
+            return {"success": False, "error": str(e), "confidence_ai": np.nan}
+
+
+class AASISTDetector:
+    """Wrapper for AASIST deep learning model."""
+    def __init__(self, model_path, device=None):
+        import sys
+        import torch
+        from pathlib import Path
+        
+        self.device = device or torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        
+        # Add AASIST to path
+        aasist_root = Path(__file__).resolve().parents[2] / 'AASIST'
+        sys.path.insert(0, str(aasist_root))
+        
+        from models.baseline import Full_AASIST_Model
+        
+        self.model = Full_AASIST_Model().to(self.device)
+        ckpt = torch.load(model_path, map_location=self.device)
+        self.model.load_state_dict(ckpt)
+        self.model.eval()
+    
+    def predict_audio(self, file_path):
+        import torch
+        try:
+            y, sr = librosa.load(file_path, sr=16000)
+            # Prepare audio
+            if len(y) < 64000:
+                y = np.pad(y, (0, 64000 - len(y)))
+            else:
+                y = y[:64000]
+            
+            x = torch.tensor(y, dtype=torch.float32).unsqueeze(0).to(self.device)
+            
+            with torch.no_grad():
+                outputs = self.model(x)
+                probs = torch.softmax(outputs, dim=1)
+                p = float(probs[0, 1].cpu().numpy())
+            
+            return {"success": True, "is_fake": bool(p >= 0.5), "confidence_ai": float(p)}
+        except Exception as e:
+            return {"success": False, "error": str(e), "confidence_ai": np.nan}
+
+
+def create_feature_extractors():
+    """Create feature extractors for different sklearn models."""
+    import sys
+    from pathlib import Path
+    
+    base = Path(__file__).resolve().parents[2]
+    data_dir = base / 'vispoofdb' / 'data'
+    
+    extractors = {}
+    
+    # LFCC features
+    try:
+        lfcc_data = np.load(data_dir / 'features_lfcc' / 'X_lfcc.npy')
+        mean_lfcc = np.mean(lfcc_data, axis=0)
+        std_lfcc = np.std(lfcc_data, axis=0)
+        
+        def extract_lfcc(y, sr):
+            import librosa
+            lfcc = librosa.feature.mfcc(y=y, sr=sr, n_mfcc=13, n_fft=512)
+            return np.concatenate([np.mean(lfcc, axis=1), np.std(lfcc, axis=1)])
+        
+        extractors['lfcc'] = extract_lfcc
+    except:
+        pass
+    
+    # MFCC40 features
+    try:
+        def extract_mfcc40(y, sr):
+            import librosa
+            mfcc = librosa.feature.mfcc(y=y, sr=sr, n_mfcc=40)
+            return np.concatenate([np.mean(mfcc, axis=1), np.std(mfcc, axis=1)])
+        
+        extractors['mfcc40'] = extract_mfcc40
+    except:
+        pass
+    
+    # WAV2VEC features
+    try:
+        from transformers import Wav2Vec2Processor, Wav2Vec2Model
+        import torch
+        
+        processor = Wav2Vec2Processor.from_pretrained("facebook/wav2vec2-base")
+        w2v_model = Wav2Vec2Model.from_pretrained("facebook/wav2vec2-base")
+        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        w2v_model.to(device).eval()
+        
+        def extract_wav2vec(y, sr):
+            inputs = processor(y, sampling_rate=sr, return_tensors="pt").to(device)
+            with torch.no_grad():
+                outputs = w2v_model(**inputs)
+                feat = outputs.last_hidden_state.mean(dim=1).squeeze().cpu().numpy()
+            return feat
+        
+        extractors['wav2vec'] = extract_wav2vec
+    except:
+        pass
+    
+    return extractors
+
+
 def load_metadata():
     # prefer vispoofdb metadata then fallback to top-level data/metadata.csv
     p1 = Path('vispoofdb/data/clean_data/metadata.csv')
@@ -143,6 +273,219 @@ def build_file_path(row):
     # metadata file_path is relative to vispoofdb/data/raw
     base = Path('vispoofdb/data/raw')
     return str((base / row['file_path']).resolve())
+
+
+def evaluate_all_models(args):
+    """Evaluate all 9 models under noise conditions."""
+    import sys
+    from pathlib import Path
+    
+    metadata = load_metadata()
+    
+    # Choose test_unseen split
+    if 'split' in metadata.columns:
+        pool = metadata[metadata['split'].str.contains('test', na=False)].copy()
+    else:
+        pool = metadata.copy()
+    
+    # Sample balanced subset
+    labels = pool['label'].unique().tolist()
+    by_label = {lab: pool[pool['label'] == lab] for lab in labels}
+    n_per_label = max(1, args.n_samples // max(1, len(labels)))
+    samples = []
+    for lab, df in by_label.items():
+        if len(df) == 0:
+            continue
+        samples.extend(df.sample(n=min(n_per_label, len(df)), random_state=42).to_dict('records'))
+    
+    if len(samples) == 0:
+        raise RuntimeError('No samples selected for evaluation')
+    
+    base = Path(__file__).resolve().parents[2]
+    models_dir = base / 'vispoofdb' / 'models_saved'
+    extractors = create_feature_extractors()
+    
+    # Load all 9 models
+    detectors = {}
+    
+    # 8 Sklearn models
+    sklearn_models = [
+        ('svm_lfcc', models_dir / 'svm_lfcc_model.pkl', models_dir / 'scaler_lfcc.pkl', 'lfcc'),
+        ('svm_mfcc', models_dir / 'svm_voice_model.pkl', models_dir / 'scaler_final.pkl', 'mfcc40'),
+        ('mlp_mfcc', models_dir / 'best_mlp.pkl', models_dir / 'scaler_mlp.pkl', 'mfcc40'),
+        ('xgboost_mfcc', models_dir / 'best_xgboost.pkl', None, 'mfcc40'),
+        ('mlp_wav2vec', models_dir / 'mlp_wav2vec_model.pkl', models_dir / 'scaler_wav2vec.pkl', 'wav2vec'),
+        ('svm_tone', models_dir / 'svm_tone_model.pkl', models_dir / 'scaler_tone.pkl', 'mfcc40'),
+        ('xgboost_tone', models_dir / 'xgboost_tone_model.pkl', None, 'mfcc40'),
+        ('svm_fusion', models_dir / 'svm_tone_fusion_model.pkl', models_dir / 'scaler_fusion.pkl', 'mfcc40'),
+    ]
+    
+    for name, model_path, scaler_path, feat_type in sklearn_models:
+        if model_path.exists() and feat_type in extractors:
+            try:
+                detectors[name] = SklearnDetector(str(model_path), str(scaler_path) if scaler_path else None, extractors[feat_type])
+                print(f"✓ Loaded {name}")
+            except Exception as e:
+                print(f"✗ Failed to load {name}: {e}")
+    
+    # 1 AASIST model
+    aasist_path = models_dir / 'aasist_best_model.pth'
+    if aasist_path.exists():
+        try:
+            detectors['aasist'] = AASISTDetector(str(aasist_path))
+            print(f"✓ Loaded AASIST")
+        except Exception as e:
+            print(f"✗ Failed to load AASIST: {e}")
+    
+    if len(detectors) == 0:
+        print("[ERROR] No models could be loaded")
+        return
+    
+    print(f"\n✓ Evaluating {len(detectors)} models under noise conditions...\n")
+    
+    # Noise scenarios
+    scenarios = [('clean', None)]
+    if args.augmentor == 'audiomentations' and AUDIOMENTATIONS_AVAILABLE:
+        CONDITIONS = {
+            'phone_call': Compose([
+                LowPassFilter(min_cutoff_freq=3000, max_cutoff_freq=3400, p=1.0),
+                HighPassFilter(min_cutoff_freq=200, max_cutoff_freq=300, p=1.0),
+                AddGaussianNoise(min_amplitude=0.001, max_amplitude=0.005, p=0.8),
+                Mp3Compression(min_bitrate=16, max_bitrate=32, p=1.0),
+            ]),
+        }
+        for k in CONDITIONS.keys():
+            scenarios.append((k, {'type': 'audiomentations', 'aug': CONDITIONS[k]}))
+    else:
+        for snr in [20, 10, 0]:
+            scenarios.append((f'noise_snr_{snr}', {'type': 'noise', 'snr': snr}))
+        scenarios.append(('telephone', {'type': 'telephone'}))
+        if has_ffmpeg():
+            for br in ['128k', '64k', '32k']:
+                scenarios.append((f'mp3_{br}', {'type': 'mp3', 'bitrate': br}))
+    
+    out_dir = Path('vispoofdb/experiments/noise_eval')
+    fig_dir = Path('vispoofdb/figures/noise')
+    ensure_dir(out_dir)
+    ensure_dir(fig_dir)
+    
+    records = []
+    
+    for scen_name, scen in scenarios:
+        print(f"Scenario: {scen_name}")
+        y_trues = []
+        y_scores = {k: [] for k in detectors.keys()}
+        
+        for row in samples:
+            src_path = build_file_path(row)
+            if not os.path.exists(src_path):
+                continue
+            
+            y, sr = librosa.load(src_path, sr=16000)
+            
+            with tempfile.NamedTemporaryFile(suffix='.wav', delete=False) as tmpf:
+                tmp_out = tmpf.name
+            
+            try:
+                if scen is None:
+                    sf.write(tmp_out, y, sr)
+                else:
+                    t = scen['type']
+                    if t == 'noise':
+                        y2 = add_white_noise(y, scen['snr'])
+                        sf.write(tmp_out, y2, sr)
+                    elif t == 'telephone':
+                        y2 = bandpass_telephone(y, sr)
+                        sf.write(tmp_out, y2, sr)
+                    elif t == 'mp3':
+                        tmp_in = tmp_out + '.in.wav'
+                        sf.write(tmp_in, y, sr)
+                        try:
+                            codec_mp3_roundtrip(tmp_in, tmp_out, bitrate=scen['bitrate'])
+                        finally:
+                            try:
+                                os.remove(tmp_in)
+                            except:
+                                pass
+                    elif t == 'audiomentations':
+                        try:
+                            aug = scen['aug']
+                            noisy = aug(samples=y, sample_rate=sr)
+                            sf.write(tmp_out, noisy, sr)
+                        except:
+                            sf.write(tmp_out, y, sr)
+                
+                # Evaluate all detectors
+                for name, det in detectors.items():
+                    try:
+                        res = det.predict_audio(tmp_out)
+                        if not res.get('success', True):
+                            score = np.nan
+                        else:
+                            score = float(res.get('confidence_ai', np.nan))
+                    except Exception as e:
+                        score = np.nan
+                    
+                    y_scores[name].append(score)
+                
+                # True label
+                true = 1 if row.get('label') != 'real' else 0
+                y_trues.append(true)
+            
+            finally:
+                try:
+                    os.remove(tmp_out)
+                except:
+                    pass
+        
+        # Compute metrics per detector
+        for name in detectors.keys():
+            scores = np.array(y_scores[name], dtype=float)
+            mask = ~np.isnan(scores)
+            if mask.sum() == 0:
+                continue
+            
+            y_true_arr = np.array(y_trues)[mask]
+            y_score_arr = scores[mask]
+            y_pred = (y_score_arr >= 0.5).astype(int)
+            
+            acc = accuracy_score(y_true_arr, y_pred)
+            prec = precision_score(y_true_arr, y_pred, zero_division=0)
+            rec = recall_score(y_true_arr, y_pred, zero_division=0)
+            f1 = f1_score(y_true_arr, y_pred, zero_division=0)
+            eer = compute_eer(y_true_arr, y_score_arr)
+            
+            records.append({
+                'scenario': scen_name,
+                'detector': name,
+                'n_samples': int(mask.sum()),
+                'accuracy': acc,
+                'precision': prec,
+                'recall': rec,
+                'f1': f1,
+                'eer': eer,
+            })
+    
+    df_summary = pd.DataFrame(records)
+    df_summary.to_csv(out_dir / 'noise_eval_summary_all_models.csv', index=False)
+    
+    # Plot EER by scenario for each detector
+    for name in set(df_summary['detector']):
+        sub = df_summary[df_summary['detector'] == name]
+        plt.figure(figsize=(10, 5))
+        plt.plot(sub['scenario'], sub['eer'], marker='o', linewidth=2, markersize=8)
+        plt.xticks(rotation=45, ha='right')
+        plt.xlabel('Scenario', fontsize=11)
+        plt.ylabel('EER', fontsize=11)
+        plt.title(f'EER by Corruption — {name}', fontsize=12, fontweight='bold')
+        plt.grid(alpha=0.3)
+        plt.tight_layout()
+        plt.savefig(fig_dir / f'eer_{name}.png', dpi=150)
+        plt.close()
+    
+    print(f"\n✓ Results saved to {out_dir}")
+    print(f"✓ Plots saved to {fig_dir}")
+    print(f"✓ Summary CSV: {out_dir / 'noise_eval_summary_all_models.csv'}")
 
 
 def evaluate(args):
@@ -376,62 +719,22 @@ def evaluate(args):
 
 
 def main():
-    parser = argparse.ArgumentParser()
-    parser.add_argument('--n-samples', type=int, default=50, help='Total number of samples to evaluate (balanced by label)')
-    parser.add_argument('--model-type', choices=['single', 'ensemble', 'aasist'], default='single', help='Which model to evaluate')
-    parser.add_argument('--aasist-root', type=str, default=None, help='Path to external AASIST pipeline root (if model-type=aasist)')
-    parser.add_argument('--aasist-checkpoint', type=str, default=None, help='Path to AASIST checkpoint file (pt)')
-    parser.add_argument('--augmentor', choices=['audiomentations', 'simple'], default='audiomentations', help='Which augmentor to use')
-    parser.add_argument('--keep-noisy', action='store_true', help='Keep noisy files (do not delete)')
+    parser = argparse.ArgumentParser(description='Evaluate all models under noise conditions')
+    parser.add_argument('--n-samples', type=int, default=50, help='Total samples to evaluate (balanced by label)')
+    parser.add_argument('--augmentor', choices=['audiomentations', 'simple'], default='audiomentations', help='Augmentor type')
     args = parser.parse_args()
     args.augmentor = args.augmentor if AUDIOMENTATIONS_AVAILABLE else 'simple'
-
-    # If user requested AASIST, try to load model
-    if args.model_type == 'aasist':
-        if not args.aasist_checkpoint:
-            print('Please provide --aasist-checkpoint when using --model-type aasist')
-            return
-        # attempt to import AASIST from provided root
-        try:
-            if args.aasist_root:
-                import sys
-                sys.path.insert(0, args.aasist_root)
-            from models.AASIST import AASISTModel
-            import torch
-            device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-            aasist_model = AASISTModel()
-            ckpt = __import__('torch').load(args.aasist_checkpoint, map_location=device)
-            state = (ckpt.get('model_state_dict') or ckpt.get('model') or ckpt)
-            aasist_model.load_state_dict(state)
-            aasist_model.to(device)
-            print('Loaded AASIST model for evaluation')
-        except Exception as e:
-            print('Failed to load AASIST model:', e)
-            return
-        # call a specialized evaluate for AASIST
-        def evaluate_aasist():
-            # reuse create noisy dataset from earlier behavior
-            condition_data = create_noisy_dataset(metadata_csv='vispoofdb/data/clean_data/metadata.csv', split='test_unseen', out_base='vispoofdb/experiments/noise_eval', n_samples=args.n_samples)
-            all_results = {}
-            for cond_name, pairs in condition_data.items():
-                print(f'Evaluating {cond_name} ({len(pairs)} samples)')
-                metrics = None
-                try:
-                    metrics = evaluate_condition(aasist_model, pairs, device)
-                except Exception as e:
-                    print('Evaluation error:', e)
-                all_results[cond_name] = metrics or {}
-            # save
-            out_dir = Path('vispoofdb/experiments/noise_eval')
-            ensure_dir(out_dir)
-            with open(out_dir / 'aasist_noise_summary.json', 'w', encoding='utf-8') as f:
-                import json
-                json.dump(all_results, f, indent=2, ensure_ascii=False)
-            print('AASIST evaluation done; saved summary to', out_dir)
-        evaluate_aasist()
-        return
-
-    evaluate(args)
+    
+    print("\n" + "="*70)
+    print("  EVALUATING ALL MODELS UNDER NOISE CONDITIONS")
+    print("="*70)
+    
+    try:
+        evaluate_all_models(args)
+    except Exception as e:
+        print(f"\n[ERROR] {e}")
+        import traceback
+        traceback.print_exc()
 
 
 if __name__ == '__main__':

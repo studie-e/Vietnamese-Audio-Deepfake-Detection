@@ -17,6 +17,7 @@ Thứ tự thực hiện:
     7. train_tone_xgboost.py  — XGBoost trên Tone-Aware     → xgboost_tone_model.pkl
     8. train_tone_fusion.py   — SVM + MFCC+Tone Fusion (64d)→ svm_tone_fusion_model.pkl
                                 (bỏ qua nếu chưa trích xuất Tone-Aware features)
+    9. train_aasist.py        — AASIST (Deep Learning)      → aasist_best_model.pth
 
 Đánh giá:
     Mỗi mô hình sẽ in kết quả trên 2 tập:
@@ -36,6 +37,7 @@ Cách chạy (từ thư mục gốc dự án):
 import subprocess
 import sys
 import time
+import os
 from pathlib import Path
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -44,6 +46,9 @@ from pathlib import Path
 BASE_DIR    = Path(__file__).resolve().parents[2]
 MODELS_DIR  = BASE_DIR / "vispoofdb" / "models"
 PYTHON      = sys.executable
+
+# Đảm bảo UTF-8 encoding cho subprocess
+os.environ['PYTHONIOENCODING'] = 'utf-8'
 
 SKIP_WAV2VEC = "--skip-wav2vec" in sys.argv
 SKIP_TONE    = "--skip-tone"    in sys.argv
@@ -65,43 +70,48 @@ if not tone_features.exists() and not SKIP_TONE:
 PIPELINE = [
     (
         MODELS_DIR / "train_lfcc_svm.py",
-        "Bước 1/8 — SVM + LFCC",
+        "Bước 1/9 — SVM + LFCC",
         False,
     ),
     (
         MODELS_DIR / "train_svm.py",
-        "Bước 2/8 — SVM + MFCC",
+        "Bước 2/9 — SVM + MFCC",
         False,
     ),
     (
         MODELS_DIR / "train_mlp.py",
-        "Bước 3/8 — MLP + MFCC",
+        "Bước 3/9 — MLP + MFCC",
         False,
     ),
     (
         MODELS_DIR / "train_xgboost.py",
-        "Bước 4/8 — XGBoost + MFCC-Delta",
+        "Bước 4/9 — XGBoost + MFCC-Delta",
         False,
     ),
     (
         MODELS_DIR / "train_wav2vec.py",
-        "Bước 5/8 — MLP + Wav2Vec2 (768 chiều)",
+        "Bước 5/9 — MLP + Wav2Vec2 (768 chiều)",
         SKIP_WAV2VEC,
     ),
     (
         MODELS_DIR / "train_tone_svm.py",
-        "Bước 6/8 — SVM + Tone-Aware (24 chiều)",
+        "Bước 6/9 — SVM + Tone-Aware (24 chiều)",
         SKIP_TONE,
     ),
     (
         MODELS_DIR / "train_tone_xgboost.py",
-        "Bước 7/8 — XGBoost + Tone-Aware (24 chiều)",
+        "Bước 7/9 — XGBoost + Tone-Aware (24 chiều)",
         SKIP_TONE,
     ),
     (
         MODELS_DIR / "train_tone_fusion.py",
-        "Bước 8/8 — SVM + MFCC+Tone Fusion (64 chiều)",
+        "Bước 8/9 — SVM + MFCC+Tone Fusion (64 chiều)",
         SKIP_TONE,
+    ),
+    (
+        MODELS_DIR / "train_aasist.py",
+        "Bước 9/9 — AASIST (Deep Learning Model)",
+        False,
     ),
 ]
 
@@ -119,7 +129,10 @@ def run_step(script_path: Path, description: str) -> bool:
     separator("-")
 
     start  = time.time()
-    result = subprocess.run([PYTHON, str(script_path)], cwd=str(BASE_DIR), text=True)
+    # Prepare environment with UTF-8 encoding for subprocess
+    env = os.environ.copy()
+    env['PYTHONIOENCODING'] = 'utf-8'
+    result = subprocess.run([PYTHON, str(script_path)], cwd=str(BASE_DIR), text=True, env=env)
     elapsed = time.time() - start
 
     separator("-")
@@ -163,6 +176,10 @@ def main():
         (
             BASE_DIR / "vispoofdb" / "data" / "features_model" / "xgb" / "splits_xgb.npy",
             "features_model/xgb/splits_xgb.npy (cần xgboost_features.py)",
+        ),
+        (
+            BASE_DIR / "vispoofdb" / "data" / "clean_data" / "metadata.csv",
+            "clean_data/metadata.csv (cần cho AASIST)",
         ),
     ]
 

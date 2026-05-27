@@ -1,0 +1,10 @@
+Model,Test_Seen_Acc,Test_Unseen_Acc,Test_Seen_EER,Test_Unseen_EER
+SVM + LFCC,92.82,96.79,5.92,3.53
+SVM + MFCC,82.71,88.81,14.74,3.67
+MLP + MFCC,83.73,90.42,13.52,1.84
+XGBoost + MFCC,87.04,84.71,11.76,15.39
+MLP + Wav2Vec2,95.26,76.55,5.0,23.69
+SVM + Tone-Aware,83.29,76.8,17.0,22.88
+XGBoost + Tone-Aware,82.74,74.36,17.27,25.56
+SVM + MFCC+Tone Fusion,84.94,87.33,12.8,6.1
+AASIST (Deep Learning),82.0,81.98,,

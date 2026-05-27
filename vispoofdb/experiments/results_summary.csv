@@ -1,19 +1,10 @@
-experiment,type,set,accuracy,precision,recall,f1,eer
-svm_lfcc,baseline,test_seen,0.9705,0.9351,0.9975,0.9653,0.0122
-svm_lfcc,baseline,test_unseen,0.7319,0.8844,0.5292,0.6621,0.1249
-svm_tone,baseline,test_seen,0.8127,0.7032,0.9425,0.8054,0.1638
-svm_tone,baseline,test_unseen,0.8635,0.8189,0.9308,0.8713,0.1438
-xgboost_tone,baseline,test_seen,0.8172,0.7073,0.9475,0.8100,0.1527
-xgboost_tone,baseline,test_unseen,0.8763,0.8257,0.9517,0.8842,0.1257
-svm_on_lfcc,swap,test_seen,0.9705,0.9351,0.9975,0.9653,0.0122
-svm_on_lfcc,swap,test_unseen,0.7319,0.8844,0.5292,0.6621,0.1249
-svm_on_tone,swap,test_seen,0.8127,0.7032,0.9425,0.8054,0.1638
-svm_on_tone,swap,test_unseen,0.8635,0.8189,0.9308,0.8713,0.1438
-svm_on_wav2vec,swap,test_seen,0.9808,0.9658,0.9883,0.9769,0.0186
-svm_on_wav2vec,swap,test_unseen,0.9702,0.9498,0.9925,0.9707,0.0263
-late_fusion_avg,fusion,test_seen,0.8621,0.7579,0.9766,0.8535,0.0536
-late_fusion_avg,fusion,test_unseen,0.8966,0.8643,0.9392,0.9002,0.0994
-svm_early_fusion,early_fusion,test_seen,0.9804,0.9568,0.9975,0.9767,0.0076
-svm_early_fusion,early_fusion,test_unseen,0.7443,0.9966,0.4867,0.6540,0.0329
-stacking_logreg,stacking,test_seen,0.9472,0.8862,1.0000,0.9397,0.0210
-stacking_logreg,stacking,test_unseen,0.9400,0.8999,0.9892,0.9424,0.0477
+Model,Test_Seen_Acc,Test_Unseen_Acc,Test_Seen_EER,Test_Unseen_EER
+SVM + LFCC,92.82,96.79,5.92,3.53
+SVM + MFCC,82.71,88.81,14.74,3.67
+MLP + MFCC,83.73,90.42,13.52,1.84
+XGBoost + MFCC,87.04,84.71,11.76,15.39
+MLP + Wav2Vec2,95.26,76.55,5.0,23.69
+SVM + Tone-Aware,83.29,76.8,17.0,22.88
+XGBoost + Tone-Aware,82.74,74.36,17.27,25.56
+SVM + Fusion (MFCC+Tone),84.94,87.33,12.8,6.1
+AASIST (Deep Learning),,,,

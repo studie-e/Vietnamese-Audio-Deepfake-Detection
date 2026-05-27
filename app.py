@@ -15,6 +15,7 @@ from src.xai.visualizer import (
     plot_mfcc_group_importance,
     plot_cross_model_heatmap,
 )
+from aasist_inference import AASISTDetector, AASISTXAIExplainer
 
 # ── Cấu hình trang ──────────────────────────────────────────────────────────
 st.set_page_config(
@@ -87,7 +88,10 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # ── Inference mode selector ─────────────────────────────────────────────────
-mode = st.selectbox("Chế độ inference:", ["Ensemble (5 models)", "Single model — SVM Wav2Vec"]) 
+mode = st.selectbox(
+    "Chế độ inference:",
+    ["Ensemble (5 models)", "Single model — SVM Wav2Vec", "Deep Learning — AASIST"]
+) 
 
 
 # ── Helper: single-model wrapper ────────────────────────────────────────────
@@ -129,33 +133,44 @@ class SingleWav2VecDetector:
 
 # ── Load models ──────────────────────────────────────────────────────────────
 @st.cache_resource(show_spinner=False)
-def load_system(use_single=False):
-    if use_single:
-        model_p = os.path.join("vispoofdb", "experiments", "svm_on_wav2vec.pkl")
-        scaler_p = os.path.join("vispoofdb", "experiments", "svm_on_wav2vec_scaler.pkl")
+def load_system(mode_name="ensemble"):
+    if mode_name == "single":
+        model_p = os.path.join("vispoofdb", "models_saved", "mlp_on_wav2vec.pkl")
+        scaler_p = os.path.join("vispoofdb", "models_saved", "scaler_wav2vec.pkl")
         if not os.path.exists(model_p) or not os.path.exists(scaler_p):
-            raise FileNotFoundError("Không tìm thấy svm_on_wav2vec model/scaler trong vispoofdb/experiments/")
+            raise FileNotFoundError("Không tìm thấy SVM Wav2Vec model/scaler")
         det = SingleWav2VecDetector(model_p, scaler_p)
         xai = VispoofdbAudioXAI(det, n_background=8)
         return det, xai
-    else:
+    
+    elif mode_name == "aasist":
+        model_p = os.path.join("vispoofdb", "models_saved", "aasist_best_model.pth")
+        if not os.path.exists(model_p):
+            raise FileNotFoundError(f"Không tìm thấy AASIST model: {model_p}")
+        det = AASISTDetector(model_p)
+        xai = AASISTXAIExplainer(det)
+        return det, xai
+    
+    else:  # ensemble
         ens = VietGuardEnsemble(models_dir="vispoofdb/models_saved")
-        xai = VispoofdbAudioXAI(ens, n_background=8)  # đủ nhanh cho demo
+        xai = VispoofdbAudioXAI(ens, n_background=8)
         return ens, xai
 
 with st.spinner("⏳ Đang khởi động hệ thống AI…"):
     try:
-        if mode.startswith("Single"):
-            detector, explainer = load_system(use_single=True)
+        if mode.startswith("Deep"):
+            detector, explainer = load_system(mode_name="aasist")
+        elif mode.startswith("Single"):
+            detector, explainer = load_system(mode_name="single")
         else:
-            detector, explainer = load_system(use_single=False)
+            detector, explainer = load_system(mode_name="ensemble")
     except FileNotFoundError as e:
-        st.warning(f"Một hoặc nhiều model ensemble bị thiếu: {e}. Chuyển sang Single model nếu có.")
-        try:
-            detector, explainer = load_system(use_single=True)
-        except Exception as e2:
-            st.error(f"Không thể khởi tạo hệ thống: {e2}")
-            raise
+        st.warning(f"Model bị thiếu: {e}")
+        st.info("💡 Vui lòng chọn chế độ khác hoặc huấn luyện model trước.")
+        st.stop()
+    except Exception as e:
+        st.error(f"Lỗi khởi tạo hệ thống: {e}")
+        raise
 
 st.success("Hệ thống đã sẵn sàng — upload file để bắt đầu phân tích!")
 st.divider()
@@ -215,10 +230,18 @@ if uploaded_file:
         prob    = result["confidence_ai"]
         is_fake = result["is_fake"]
         details = result["details"]
-        model_names = ["SVM + Wav2Vec2"] if len(details) == 1 else ["LFCC+SVM", "Wav2Vec+MLP", "MFCC+SVM", "XGBoost", "MFCC+MLP"]
+        
+        # Determine model names based on number of outputs
+        if len(details) == 1:
+            if mode.startswith("Deep"):
+                model_names = ["AASIST (Deep Learning)"]
+            else:
+                model_names = ["SVM + Wav2Vec2"]
+        else:
+            model_names = ["LFCC+SVM", "Wav2Vec+MLP", "MFCC+SVM", "XGBoost", "MFCC+MLP"]
 
         # ── Tabs ─────────────────────────────────────────────────────────
-        tab_detect, tab_xai = st.tabs(["Kết quả Phát hiện", "Giải thích XAI (SHAP)"])
+        tab_detect, tab_xai = st.tabs(["Kết quả Phát hiện", "Giải thích XAI"])
 
         # ==================================================================
         # Tab 1: Detection
@@ -241,132 +264,187 @@ if uploaded_file:
                 st.pyplot(fig_gauge, use_container_width=False)
 
             st.divider()
-            st.markdown("#### 📋 Biểu quyết chi tiết của 5 mô hình")
-            cols = st.columns(5)
-            for col, name, val in zip(cols, model_names, details):
-                delta_text = "🔴 Fake" if val >= 0.5 else "🟢 Real"
-                col.metric(label=name, value=f"{val*100:.1f}%", delta=delta_text)
+            
+            # Show model details based on mode
+            if mode.startswith("Deep"):
+                st.markdown("#### 🧠 Thông tin mô hình")
+                model_info = detector.get_model_info()
+                st.markdown(f"""
+                <div class="result-card">
+                <b>Mô hình:</b> {model_info['name']}<br>
+                <b>Mô tả:</b> {model_info['description']}<br>
+                <b>Thiết bị:</b> {model_info['device']}<br>
+                <b>Phương pháp:</b> Deep Learning (AASIST - Anti-Spoofing with Automatic Speaker Verification)
+                </div>
+                """, unsafe_allow_html=True)
+            else:
+                st.markdown("#### 📋 Biểu quyết chi tiết của các mô hình")
+                cols = st.columns(min(len(details), 5))
+                for col, name, val in zip(cols, model_names, details):
+                    delta_text = "🔴 Fake" if val >= 0.5 else "🟢 Real"
+                    col.metric(label=name, value=f"{val*100:.1f}%", delta=delta_text)
 
         # ==================================================================
         # Tab 2: XAI
         # ==================================================================
         with tab_xai:
             if xai_results is None:
-                st.info("💡 Bật toggle **'Bật phân tích XAI'** trước khi nhấn Phân tích để xem giải thích SHAP.")
+                st.info("💡 Bật toggle **'Bật phân tích XAI'** trước khi nhấn Phân tích để xem giải thích.")
                 st.stop()
-
-            summary = xai_results.get("_ensemble_summary", {})
-
-            if summary.get("model_weights"):
-                st.markdown("### 🧭 Tổng quan XAI")
-                left_sum, right_sum = st.columns([1, 1])
-                with left_sum:
-                    st.markdown("**Nhận xét tự động:**")
-                    for note in summary.get("notes", []):
-                        st.markdown(f"- {note}")
-                with right_sum:
-                    fig_weights = plot_ensemble_weights(summary)
-                    st.pyplot(fig_weights, use_container_width=True)
-
-            # ── Ensemble overview — XÁC SUẤT THỰC của từng model ────────────
-            st.markdown("### ⚖️ Phiếu bầu / xác suất đầu ra")
-            if len(details) > 1:
-                st.caption("Mỗi model độc lập dự đoán xác suất AI — kết quả cuối là trung bình cộng.")
+            
+            # AASIST XAI: Gradient-based saliency
+            if mode.startswith("Deep"):
+                if xai_results.get("success"):
+                    st.markdown("### 🧠 Giải thích đặc trưng — AASIST (Gradient-based Saliency)")
+                    st.markdown("""
+                    <div class="note-box">
+                    ✅ <b>AASIST dùng Gradient-based Saliency</b> — tính độ nhạy cảm của output
+                    model deep learning đối với từng sample trong waveform.<br>
+                    🔴 Vùng đỏ (cao) = những vùng âm thanh quan trọng với quyết định AI<br>
+                    🟢 Vùng xanh (thấp) = những vùng ít ảnh hưởng đến kết quả
+                    </div>
+                    """, unsafe_allow_html=True)
+                    
+                    st.markdown(f"**Xác suất AI: {prob*100:.2f}%** — Mức độ: {'Cao 🔴' if prob >= 0.7 else 'Trung bình 🟡' if prob >= 0.4 else 'Thấp 🟢'}")
+                    
+                    # Plot saliency
+                    saliency = xai_results.get("saliency", np.array([]))
+                    if len(saliency) > 0:
+                        import matplotlib.pyplot as plt
+                        fig, ax = plt.subplots(figsize=(12, 4))
+                        time_steps = np.arange(len(saliency))
+                        ax.fill_between(time_steps, saliency, alpha=0.7, color='#EF4444')
+                        ax.plot(time_steps, saliency, color='#DC2626', linewidth=1.5)
+                        ax.set_xlabel('Time Step', color='#E2E8F0')
+                        ax.set_ylabel('Saliency (Importance)', color='#E2E8F0')
+                        ax.set_title('Audio Saliency Map — Vùng đỏ = Quan trọng với kết quả AI', 
+                                   color='#E2E8F0', fontsize=12, fontweight='bold')
+                        ax.set_facecolor('#1E293B')
+                        fig.patch.set_facecolor('#0F172A')
+                        ax.grid(True, alpha=0.2, color='#334155')
+                        ax.tick_params(colors='#94A3B8')
+                        st.pyplot(fig, use_container_width=True)
+                    
+                    # Statistics
+                    col1, col2, col3 = st.columns(3)
+                    with col1:
+                        st.metric("Max Saliency", f"{saliency.max():.3f}" if len(saliency) > 0 else "N/A")
+                    with col2:
+                        st.metric("Mean Saliency", f"{saliency.mean():.3f}" if len(saliency) > 0 else "N/A")
+                    with col3:
+                        st.metric("Phương pháp", "Gradient-based")
+                else:
+                    st.warning(f"⚠️ Không thể tính XAI: {xai_results.get('error', 'Unknown error')}")
+            
+            # Ensemble/Single model XAI: SHAP
             else:
-                st.caption("Chế độ single-model: hiển thị xác suất từ mô hình Wav2Vec2 + SVM.")
+                summary = xai_results.get("_ensemble_summary", {})
 
-            vote_cols = st.columns(len(details))
-            for col, name, val in zip(vote_cols, model_names, details):
-                verdict_label = "🔴 AI" if val >= 0.5 else "🟢 Real"
-                bg     = "#3B1A1A" if val >= 0.5 else "#1A3B1A"
-                border = "#F87171" if val >= 0.5 else "#4ADE80"
-                col.markdown(f"""
-                <div style="background:{bg};border-left:4px solid {border};
-                            border-radius:8px;padding:0.7rem 0.8rem;text-align:center;">
-                <div style="font-size:0.8rem;color:#E2E8F0;margin-bottom:4px;font-weight:500;">{name}</div>
-                <div style="font-size:1.5rem;font-weight:700;
-                            color:{'#F87171' if val>=0.5 else '#4ADE80'}">
-                    {val*100:.1f}%
-                </div>
-                <div style="font-size:0.85rem;margin-top:4px;color:#F8FAFC;font-weight:500;">{verdict_label}</div>
-                </div>
-                """, unsafe_allow_html=True)
+                if summary.get("model_weights"):
+                    st.markdown("### 🧭 Tổng quan XAI")
+                    left_sum, right_sum = st.columns([1, 1])
+                    with left_sum:
+                        st.markdown("**Nhận xét tự động:**")
+                        for note in summary.get("notes", []):
+                            st.markdown(f"- {note}")
+                    with right_sum:
+                        fig_weights = plot_ensemble_weights(summary)
+                        st.pyplot(fig_weights, use_container_width=True)
 
-            avg        = sum(details) / len(details)
-            votes_fake = sum(1 for v in details if v >= 0.5)
-            denom = len(details)
-            vote_phrase = f"{votes_fake}/{denom} model vote AI" if denom > 1 else "Single model output"
-            st.markdown(f"""
-            <div style="background:#1E293B;border-radius:10px;padding:0.9rem 1.4rem;
-                        margin-top:0.8rem;border:1px solid #334155;text-align:center;">
-            <code>({' + '.join(f'{v:.2f}' for v in details)}) ÷ {denom} = <b>{avg:.3f}</b></code>
-            &nbsp;→&nbsp;
-            <b style="color:{'#EF4444' if avg>=0.5 else '#22C55E'}">
-            {'🚨 AI (≥ 0.5)' if avg >= 0.5 else '✅ Real (< 0.5)'}
-            </b>
-            &nbsp;&nbsp;|&nbsp;&nbsp;
-            <b>{vote_phrase}</b>
-            </div>
-            """, unsafe_allow_html=True)
+                # ── Ensemble overview — XÁC SUẤT THỰC của từng model ────────────
+                st.markdown("### ⚖️ Phiếu bầu / xác suất đầu ra")
+                if len(details) > 1:
+                    st.caption("Mỗi model độc lập dự đoán xác suất AI — kết quả cuối là trung bình cộng.")
+                else:
+                    st.caption("Chế độ single-model: hiển thị xác suất từ mô hình Wav2Vec2 + SVM.")
 
-            st.divider()
+                vote_cols = st.columns(len(details))
+                for col, name, val in zip(vote_cols, model_names, details):
+                    verdict_label = "🔴 AI" if val >= 0.5 else "🟢 Real"
+                    bg     = "#3B1A1A" if val >= 0.5 else "#1A3B1A"
+                    border = "#F87171" if val >= 0.5 else "#4ADE80"
+                    col.markdown(f"""
+                    <div style="background:{bg};border-left:4px solid {border};
+                                border-radius:8px;padding:0.7rem 0.8rem;text-align:center;">
+                    <div style="font-size:0.8rem;color:#E2E8F0;margin-bottom:4px;font-weight:500;">{name}</div>
+                    <div style="font-size:1.5rem;font-weight:700;
+                                color:{'#F87171' if val>=0.5 else '#4ADE80'}">
+                        {val*100:.1f}%
+                    </div>
+                    <div style="font-size:0.85rem;margin-top:4px;color:#F8FAFC;font-weight:500;">{verdict_label}</div>
+                    </div>
+                    """, unsafe_allow_html=True)
 
-            # ── XGBoost SHAP — phần duy nhất đáng tin cậy ────────────────────
-            xai_model_key = "XGBoost" if "XGBoost" in xai_results else ("Wav2Vec2" if "Wav2Vec2" in xai_results else None)
-            if xai_model_key == "XGBoost":
-                st.markdown("### 🌲 Giải thích đặc trưng — XGBoost (TreeSHAP)")
-                st.markdown("""
-                <div class="note-box">
-                ✅ <b>XGBoost dùng TreeSHAP</b> — phương pháp SHAP chính xác nhất, tính toán
-                đúng đóng góp của từng feature MFCC vào quyết định của model XGBoost.<br>
-                🔴 Bar đỏ = feature đẩy về phía AI &nbsp;|&nbsp;
-                🟢 Bar xanh = feature đẩy về phía Real &nbsp;|&nbsp;
-                Dashed line = điểm gốc (base value)
-                </div>
-                """, unsafe_allow_html=True)
-            elif xai_model_key == "Wav2Vec2":
-                st.markdown("### 🎧 Giải thích đặc trưng — Wav2Vec2 (KernelSHAP)")
-                st.markdown("""
-                <div class="note-box">
-                ✅ <b>Wav2Vec2 dùng KernelSHAP</b> — các chiều embedding được gom theo cụm 64 chiều
-                để biểu đồ dễ đọc hơn.<br>
-                🔴 Bar đỏ = chiều/nhóm đẩy về phía AI &nbsp;|&nbsp;
-                🟢 Bar xanh = chiều/nhóm đẩy về phía Real &nbsp;|&nbsp;
-                Dashed line = điểm gốc (base value)
-                </div>
-                """, unsafe_allow_html=True)
-
-            if xai_model_key:
-                xgb_res = xai_results.get(xai_model_key)
-                sv_sum   = float(np.sum(xgb_res["shap_values"]))
-                base     = xgb_res["base_value"]
-                logit    = base + sv_sum          # log-odds (raw SHAP output)
-                # Sigmoid để chuyển về probability: khớp với predict_proba
-                final_p  = float(1.0 / (1.0 + np.exp(-logit)))
-                color    = "#EF4444" if final_p >= 0.5 else "#22C55E"
-                verdict  = "AI / Deepfake 🚨" if final_p >= 0.5 else "Giọng thật ✅"
-
+                avg        = sum(details) / len(details)
+                votes_fake = sum(1 for v in details if v >= 0.5)
+                denom = len(details)
+                vote_phrase = f"{votes_fake}/{denom} model vote AI" if denom > 1 else "Single model output"
                 st.markdown(f"""
-                <div style="background:#1E293B;border-radius:10px;padding:0.7rem 1.2rem;
-                            border-left:4px solid {color};margin-bottom:0.8rem;">
-                <code>sigmoid({base:.3f} + {sv_sum:+.3f}) = sigmoid({logit:.3f}) = <b>{final_p:.1%}</b></code>
-                &nbsp;→&nbsp; <b style="color:{color}">{verdict}</b>
+                <div style="background:#1E293B;border-radius:10px;padding:0.9rem 1.4rem;
+                            margin-top:0.8rem;border:1px solid #334155;text-align:center;">
+                <code>({' + '.join(f'{v:.2f}' for v in details)}) ÷ {denom} = <b>{avg:.3f}</b></code>
+                &nbsp;→&nbsp;
+                <b style="color:{'#EF4444' if avg>=0.5 else '#22C55E'}">
+                {'🚨 AI (≥ 0.5)' if avg >= 0.5 else '✅ Real (< 0.5)'}
+                </b>
+                &nbsp;&nbsp;|&nbsp;&nbsp;
+                <b>{vote_phrase}</b>
                 </div>
                 """, unsafe_allow_html=True)
 
+                st.divider()
 
-                col_wf, col_tbl = st.columns([2, 1])
-                with col_wf:
-                    fig_wf = plot_waterfall(xgb_res, "XGBoost", top_k=15)
-                    st.pyplot(fig_wf, use_container_width=True)
+                # ── XGBoost SHAP
+                xai_model_key = "XGBoost" if "XGBoost" in xai_results else ("Wav2Vec2" if "Wav2Vec2" in xai_results else None)
+                if xai_model_key == "XGBoost":
+                    st.markdown("### 🌲 Giải thích đặc trưng — XGBoost (TreeSHAP)")
+                    st.markdown("""
+                    <div class="note-box">
+                    ✅ <b>XGBoost dùng TreeSHAP</b> — tính toán đúng đóng góp của từng feature MFCC.<br>
+                    🔴 Bar đỏ = feature đẩy về phía AI &nbsp;|&nbsp;
+                    🟢 Bar xanh = feature đẩy về phía Real &nbsp;|&nbsp;
+                    Dashed line = điểm gốc (base value)
+                    </div>
+                    """, unsafe_allow_html=True)
+                elif xai_model_key == "Wav2Vec2":
+                    st.markdown("### 🎧 Giải thích đặc trưng — Wav2Vec2 (KernelSHAP)")
+                    st.markdown("""
+                    <div class="note-box">
+                    ✅ <b>Wav2Vec2 dùng KernelSHAP</b> — các chiều embedding được gom theo cụm 64 chiều.<br>
+                    🔴 Bar đỏ = chiều/nhóm đẩy về phía AI &nbsp;|&nbsp;
+                    🟢 Bar xanh = chiều/nhóm đẩy về phía Real
+                    </div>
+                    """, unsafe_allow_html=True)
 
-                with col_tbl:
-                    st.markdown("**Top 10 features ảnh hưởng nhất:**")
-                    for t in xgb_res["top_k"][:10]:
-                        bar_color = "🔴" if t["shap_value"] > 0 else "🟢"
-                        st.markdown(
-                            f"`{t['feature']}`  \n"
-                            f"{bar_color} `{t['shap_value']:+.4f}`"
-                        )
-            else:
-                st.warning("Không tìm thấy kết quả SHAP phù hợp cho mẫu này.")
+                if xai_model_key:
+                    xgb_res = xai_results.get(xai_model_key)
+                    sv_sum   = float(np.sum(xgb_res["shap_values"]))
+                    base     = xgb_res["base_value"]
+                    logit    = base + sv_sum
+                    final_p  = float(1.0 / (1.0 + np.exp(-logit)))
+                    color    = "#EF4444" if final_p >= 0.5 else "#22C55E"
+                    verdict  = "AI / Deepfake 🚨" if final_p >= 0.5 else "Giọng thật ✅"
+
+                    st.markdown(f"""
+                    <div style="background:#1E293B;border-radius:10px;padding:0.7rem 1.2rem;
+                                border-left:4px solid {color};margin-bottom:0.8rem;">
+                    <code>sigmoid({base:.3f} + {sv_sum:+.3f}) = sigmoid({logit:.3f}) = <b>{final_p:.1%}</b></code>
+                    &nbsp;→&nbsp; <b style="color:{color}">{verdict}</b>
+                    </div>
+                    """, unsafe_allow_html=True)
+
+                    col_wf, col_tbl = st.columns([2, 1])
+                    with col_wf:
+                        fig_wf = plot_waterfall(xgb_res, xai_model_key, top_k=15)
+                        st.pyplot(fig_wf, use_container_width=True)
+
+                    with col_tbl:
+                        st.markdown("**Top 10 features:**")
+                        for t in xgb_res["top_k"][:10]:
+                            bar_color = "🔴" if t["shap_value"] > 0 else "🟢"
+                            st.markdown(
+                                f"`{t['feature']}`  \n"
+                                f"{bar_color} `{t['shap_value']:+.4f}`"
+                            )
+                else:
+                    st.warning("Không tìm thấy kết quả SHAP phù hợp cho mẫu này.")

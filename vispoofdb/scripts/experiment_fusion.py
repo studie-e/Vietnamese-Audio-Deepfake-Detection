@@ -16,6 +16,8 @@ Ghi chú: Script cố gắng tìm các file feature trong các đường dẫn t
 import os
 import joblib
 import numpy as np
+import sys
+import torch
 from pathlib import Path
 from sklearn.preprocessing import StandardScaler
 from sklearn.svm import SVC
@@ -179,6 +181,68 @@ for name, model_file, scaler_file, feat_key in saved_model_info:
         RESULTS.append((name, 'baseline', res_seen, res_un))
     except Exception as e:
         print(f"Error evaluating {name}: {e}")
+
+# Evaluate AASIST if available
+print("\n== Evaluating AASIST (Deep Learning) ==\n")
+try:
+    aasist_model_path = MODELS_DIR / 'aasist_best_model.pth'
+    metadata_path = BASE / 'vispoofdb' / 'data' / 'clean_data' / 'metadata.csv'
+    
+    if aasist_model_path.exists() and metadata_path.exists():
+        from pathlib import Path as P
+        aasist_root = BASE / 'AASIST'
+        sys.path.insert(0, str(aasist_root))
+        
+        from dataset import AudioDataset
+        from models.baseline import Full_AASIST_Model
+        from torch.utils.data import DataLoader
+        
+        device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+        aasist_model = Full_AASIST_Model().to(device)
+        aasist_model.load_state_dict(torch.load(str(aasist_model_path), map_location=device))
+        aasist_model.eval()
+        
+        # Load test_seen and test_unseen data
+        for split_name in ['test_seen', 'test_unseen']:
+            dataset = AudioDataset(str(metadata_path), split=split_name)
+            loader = DataLoader(dataset, batch_size=16, shuffle=False)
+            
+            all_preds = []
+            all_probs = []
+            all_labels = []
+            
+            with torch.no_grad():
+                for x, y in loader:
+                    x = x.to(device)
+                    outputs = aasist_model(x)
+                    probs = torch.softmax(outputs, dim=1)[:, 1].cpu().numpy()
+                    preds = torch.argmax(outputs, dim=1).cpu().numpy()
+                    
+                    all_probs.extend(probs)
+                    all_preds.extend(preds)
+                    all_labels.extend(y.numpy())
+            
+            all_probs = np.array(all_probs)
+            all_preds = np.array(all_preds)
+            all_labels = np.array(all_labels)
+            
+            if split_name == 'test_seen':
+                res_seen = eval_preds(all_labels, all_preds, all_probs)
+            else:
+                res_un = eval_preds(all_labels, all_preds, all_probs)
+        
+        print(f"Model AASIST -- test_seen acc={res_seen['accuracy']*100:.2f}% eer={res_seen['eer']*100:.2f}% | test_unseen acc={res_un['accuracy']*100:.2f}% eer={res_un['eer']*100:.2f}%")
+        RESULTS.append(('AASIST', 'baseline', res_seen, res_un))
+    else:
+        if not aasist_model_path.exists():
+            print(f"AASIST model not found: {aasist_model_path}")
+        if not metadata_path.exists():
+            print(f"Metadata not found: {metadata_path}")
+
+except Exception as e:
+    print(f"Error evaluating AASIST: {e}")
+    import traceback
+    traceback.print_exc()
 
 
 # Helper: quick trainer for common models
