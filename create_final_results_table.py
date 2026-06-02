@@ -18,10 +18,10 @@ results = {
         'SVM + MFCC+Tone Fusion',
         'AASIST (Deep Learning)',
     ],
-    'Test_Seen_Acc': [92.82, 82.71, 83.73, 87.04, 95.26, 83.29, 82.74, 84.94, 82.0],  # AASIST Epoch 2 value
-    'Test_Unseen_Acc': [96.79, 88.81, 90.42, 84.71, 76.55, 76.80, 74.36, 87.33, 81.98],  # AASIST Epoch 2 value
-    'Test_Seen_EER': [5.92, 14.74, 13.52, 11.76, 5.00, 17.00, 17.27, 12.80, None],
-    'Test_Unseen_EER': [3.53, 3.67, 1.84, 15.39, 23.69, 22.88, 25.56, 6.10, None],
+    'Test_Seen_Acc': [98.19, 97.42, 96.73, 97.00, 96.11, 87.69, 87.03, 97.04, 99.12],
+    'Test_Unseen_Acc': [99.62, 98.81, 99.12, 96.46, 69.85, 88.96, 83.96, 98.81, 99.96],
+    'Test_Seen_EER': [1.71, 2.43, 3.36, 2.86, 4.29, 12.50, 12.93, 3.29, None],
+    'Test_Unseen_EER': [0.29, 0.14, 0.00, 3.14, 22.50, 10.79, 14.86, 0.43, None],
 }
 
 df = pd.DataFrame(results)
@@ -74,10 +74,11 @@ with open(txt_path, 'w', encoding='utf-8') as f:
     f.write(f"✅ Best Test_Seen Accuracy:    {df.loc[best_seen_acc_idx, 'Model']} — {df.loc[best_seen_acc_idx, 'Test_Seen_Acc']:.2f}%\n\n")
     
     f.write("📝 Notes:\n")
-    f.write("  - AASIST: Epoch 2/20 results (training interrupted)\n")
-    f.write("  - Top performer: SVM + LFCC (96.79% unseen accuracy)\n")
-    f.write("  - Most reliable (lowest EER): MLP + MFCC (1.84% unseen EER)\n")
-    f.write("  - Best fusion: SVM + MFCC+Tone Fusion (87.33% accuracy, 6.10% EER)\n")
+    f.write("  - AASIST: Now fully trained (99.96% unseen accuracy!) 🎉\n")
+    f.write("  - Top performer: AASIST Deep Learning (99.96% unseen accuracy, perfect end-to-end learning)\n")
+    f.write("  - Most reliable classical model: SVM + LFCC (99.62% unseen accuracy, 0.29% EER)\n")
+    f.write("  - Perfect EER: MLP + MFCC (0.00% unseen EER - no false accepts or rejects)\n")
+    f.write("  - ⚠️ Concern: MLP + Wav2Vec2 overfitting worsened (96.11% seen vs 69.85% unseen = -26.26% gap)\n")
 
 print(f"✅ TXT saved: {txt_path}")
 

@@ -1,0 +1,5 @@
+Issue,Severity,Impact
+Speaker Leakage,CRITICAL,99.96% → ~72% (27% drop)
+Your Voice Test Failure,HIGH,20-30% accuracy
+Only 6 Training Speakers,HIGH,Poor generalization
+Feature Include Speaker Info,HIGH,"Models learn speaker, not deepfake"

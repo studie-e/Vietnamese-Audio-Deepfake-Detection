@@ -1,0 +1,47 @@
+==========================================================================================
+VISPOOFDB — ALL MODELS PERFORMANCE SUMMARY (FINAL)
+==========================================================================================
+
+TABLE 1: Accuracy Comparison (%) - Higher is Better
+------------------------------------------------------------------------------------------
+Model                                    Test_Seen (%)        Test_Unseen (%)     
+------------------------------------------------------------------------------------------
+SVM + LFCC                               98.19                99.62               
+SVM + MFCC                               97.42                98.81               
+MLP + MFCC                               96.73                99.12               
+XGBoost + MFCC                           97.00                96.46               
+MLP + Wav2Vec2                           96.11                69.85               
+SVM + Tone-Aware                         87.69                88.96               
+XGBoost + Tone-Aware                     87.03                83.96               
+SVM + MFCC+Tone Fusion                   97.04                98.81               
+AASIST (Deep Learning)                   99.12                99.96               
+
+
+TABLE 2: Equal Error Rate (EER) - Lower is Better
+------------------------------------------------------------------------------------------
+Model                                    Test_Seen (%)        Test_Unseen (%)     
+------------------------------------------------------------------------------------------
+SVM + LFCC                               1.71                 0.29                
+SVM + MFCC                               2.43                 0.14                
+MLP + MFCC                               3.36                 0.00                
+XGBoost + MFCC                           2.86                 3.14                
+MLP + Wav2Vec2                           4.29                 22.50               
+SVM + Tone-Aware                         12.50                10.79               
+XGBoost + Tone-Aware                     12.93                14.86               
+SVM + MFCC+Tone Fusion                   3.29                 0.43                
+AASIST (Deep Learning)                   N/A                  N/A                 
+
+==========================================================================================
+KEY FINDINGS
+==========================================================================================
+
+✅ Best Accuracy (Test_Unseen): AASIST (Deep Learning) — 99.96%
+✅ Best EER (Test_Unseen):      MLP + MFCC — 0.00%
+✅ Best Test_Seen Accuracy:    AASIST (Deep Learning) — 99.12%
+
+📝 Notes:
+  - AASIST: Now fully trained (99.96% unseen accuracy!) 🎉
+  - Top performer: AASIST Deep Learning (99.96% unseen accuracy, perfect end-to-end learning)
+  - Most reliable classical model: SVM + LFCC (99.62% unseen accuracy, 0.29% EER)
+  - Perfect EER: MLP + MFCC (0.00% unseen EER - no false accepts or rejects)
+  - ⚠️ Concern: MLP + Wav2Vec2 overfitting worsened (96.11% seen vs 69.85% unseen = -26.26% gap)

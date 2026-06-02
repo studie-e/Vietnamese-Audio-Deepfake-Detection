@@ -1,0 +1,185 @@
+#!/usr/bin/env python3
+"""
+FULL PIPELINE EXECUTION GUIDE
+Run scripts in order for complete retraining with new diverse speaker data
+"""
+
+import sys
+if sys.stdout.encoding != 'utf-8':
+    sys.stdout.reconfigure(encoding='utf-8')
+
+print("\n" + "="*90)
+print("🚀 FULL PIPELINE EXECUTION PLAN")
+print("="*90)
+
+pipeline = [
+    {
+        'step': 1,
+        'name': 'scripts_data_process.py',
+        'time': '5-10 min',
+        'what': 'Load new YouTube data, organize real/fake samples',
+        'output': 'metadata.csv (updated with new data)',
+        'check': 'Verify new data loaded (~10K+ samples from YouTube)',
+    },
+    {
+        'step': 2,
+        'name': 'scripts_feature_extract.py',
+        'time': '20-30 min',
+        'what': 'Extract MFCC, LFCC, Wav2Vec2, Tone features from audio',
+        'output': 'features_mfcc/, features_lfcc/, features_wav2vec/, etc.',
+        'check': 'Check feature shapes match expected dimensions',
+    },
+    {
+        'step': 3,
+        'name': 'scripts_train.py',
+        'time': '30-60 min',
+        'what': 'Train all 9 models (SVM, MLP, XGBoost, AASIST)',
+        'output': 'models_saved/ (updated model files)',
+        'check': '✅ Save results to training_runs/run_20260601_211827/',
+    },
+    {
+        'step': 4,
+        'name': 'experiment_fusion.py',
+        'time': '5-10 min',
+        'what': 'Test ensemble/fusion approaches',
+        'output': 'Fusion model results',
+        'check': 'Compare with individual model performance',
+    },
+    {
+        'step': 5,
+        'name': 'plot_results.py',
+        'time': '2-3 min',
+        'what': 'Generate comparison plots and visualizations',
+        'output': 'figures/ (accuracy, EER, ROC plots)',
+        'check': 'Verify plots show realistic numbers (80-85%, not 99%)',
+    },
+    {
+        'step': 6,
+        'name': 'eval_noise_augmentation.py',
+        'time': '5-10 min',
+        'what': 'Test robustness with noise/augmentation',
+        'output': 'Augmentation resilience metrics',
+        'check': 'Verify models robust to background noise',
+    },
+]
+
+print(f"""
+📋 EXECUTION ORDER:
+
+""")
+
+for p in pipeline:
+    print(f"{p['step']}️⃣  {p['name']}")
+    print(f"   ⏱️  Time: {p['time']}")
+    print(f"   🎯 What: {p['what']}")
+    print(f"   📤 Output: {p['output']}")
+    print(f"   ✓ Check: {p['check']}")
+    print()
+
+print("="*90)
+print("📊 RESULTS TRACKING")
+print("="*90)
+
+print(f"""
+After scripts_train.py completes, manually save results:
+
+✅ CRITICAL: Save to THIS folder:
+   👉 vispoofdb/experiments/training_runs/run_20260601_211827/
+
+📋 What to save:
+   1. Test_Seen_Acc for each model
+   2. Test_Unseen_Acc for each model
+   3. Test_Seen_EER for each model  
+   4. Test_Unseen_EER for each model
+   5. Training time
+   6. Model size
+
+💾 Save to: model_results.csv
+
+Expected values (NEW DATA - SHOULD BE REALISTIC):
+   - SVM+LFCC: ~80-85% test_unseen (vs 99.62% before)
+   - AASIST: ~82-87% test_unseen (vs 99.96% before)
+   - Your voice: ~75-85% (vs 20-30% before) ← MOST IMPORTANT!
+""")
+
+print("="*90)
+print("⚠️  IMPORTANT CHECKS")
+print("="*90)
+
+print(f"""
+Before starting:
+  ✅ New data loaded at: vispoofdb/data/raw/real/
+  ✅ Results folder ready: vispoofdb/experiments/training_runs/run_20260601_211827/
+  ✅ models_saved/ backed up (or willing to retrain)
+  ✅ Have test labels ready for evaluation
+
+During training:
+  ✅ Watch for memory issues (especially AASIST)
+  ✅ Check feature extraction dimensions match
+  ✅ Monitor training loss curves (should decrease smoothly)
+
+After training:
+  ✅ **CRITICAL**: Results should show 80-85%, NOT 99%!
+  ✅ If accuracy still 99%, check: Did scripts use NEW data?
+  ✅ Test on your voice - should improve to 75-85% range
+
+Expected timeline:
+  Total: ~2-3 hours (CPU)
+  With GPU: ~1-1.5 hours
+""")
+
+print("="*90)
+print("🎯 SUCCESS CRITERIA")
+print("="*90)
+
+print(f"""
+Your retraining is SUCCESSFUL if:
+
+✅ 1. Test_Unseen_Acc drops to 80-85% (realistic generalization)
+✅ 2. All 9 models show similar accuracy (no outliers like 99.96%)
+✅ 3. Your voice accuracy improves to 75-85% (vs 20-30%)
+✅ 4. Results saved to: run_20260601_211827/model_results.csv
+
+❌ RED FLAGS (something went wrong):
+   ❌ Still getting 99%+ accuracy (using old data?)
+   ❌ Your voice test still fails at 20-30% (features not updated?)
+   ❌ AASIST crashes or OOM (try reducing batch size)
+   ❌ Feature files not updated (check timestamps)
+""")
+
+print("="*90)
+print("📝 QUICK COMMANDS")
+print("="*90)
+
+print(f"""
+# Run full pipeline:
+python vispoofdb/scripts/scripts_data_process.py
+python vispoofdb/scripts/scripts_feature_extract.py
+python vispoofdb/scripts/scripts_train.py
+python vispoofdb/scripts/experiment_fusion.py
+python vispoofdb/scripts/plot_results.py
+python vispoofdb/scripts/eval_noise_augmentation.py
+
+# Check results:
+cat vispoofdb/experiments/training_runs/run_20260601_211827/model_results.csv
+
+# Compare before/after:
+cat vispoofdb/experiments/training_runs/run_20260601_211827/before_after_comparison.csv
+""")
+
+print("\n" + "="*90)
+print("🚀 READY TO START!")
+print("="*90)
+print(f"""
+Step-by-step:
+  1. Run: python vispoofdb/scripts/scripts_data_process.py
+  2. Run: python vispoofdb/scripts/scripts_feature_extract.py
+  3. Run: python vispoofdb/scripts/scripts_train.py
+     ↓ AFTER THIS STEP, SAVE RESULTS TO run_20260601_211827/
+  4. Run: python vispoofdb/scripts/experiment_fusion.py
+  5. Run: python vispoofdb/scripts/plot_results.py
+  6. Run: python vispoofdb/scripts/eval_noise_augmentation.py
+
+Then: Test on your voice! Should be 75-85% instead of 20-30% 🎉
+""")
+print("="*90 + "\n")
