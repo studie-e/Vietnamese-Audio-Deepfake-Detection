@@ -19,7 +19,7 @@ import torch.nn.utils.prune as prune
 
 
 # Defaults
-MODEL_PATH_DEFAULT = "best_model.pt"
+MODEL_PATH_DEFAULT = "aasist_best_model.pth"
 RESULTS_FILE_DEFAULT = "quantize_results.json"
 SAMPLE_RATE = 16000
 AUDIO_LEN = SAMPLE_RATE * 4

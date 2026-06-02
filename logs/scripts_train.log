@@ -1,0 +1,34 @@
+Đang tải dữ liệu LFCC...
+Tổng số mẫu: 14195
+Phân phối splits: {np.str_('test_seen'): np.int64(1199), np.str_('test_unseen'): np.int64(8200), np.str_('train'): np.int64(4796)}
+
+Tập Train:        4796 mẫu
+Tập Test_seen:    1199  mẫu  (nguồn đã thấy khi train)
+Tập Test_unseen:  8200 mẫu  (nguồn hoàn toàn mới)
+
+--- ĐANG HUẤN LUYỆN SVM (LFCC) ---
+Traceback (most recent call last):
+  File "D:\Projects\Vietnamese-Audio-Deepfake-Detection.worktrees\agents-project-review-report-writing\vispoofdb\models\train_lfcc_svm.py", line 54, in <module>
+    model.fit(X_train_sc, y_train)
+  File "C:\Users\Acer\anaconda3\envs\seminar\lib\site-packages\sklearn\base.py", line 1473, in wrapper
+    return fit_method(estimator, *args, **kwargs)
+  File "C:\Users\Acer\anaconda3\envs\seminar\lib\site-packages\sklearn\svm\_base.py", line 199, in fit
+    y = self._validate_targets(y)
+  File "C:\Users\Acer\anaconda3\envs\seminar\lib\site-packages\sklearn\svm\_base.py", line 742, in _validate_targets
+    raise ValueError(
+ValueError: The number of classes has to be greater than one; got 1 class
+=================================================================
+  VISPOOFDB — MODEL TRAINING PIPELINE
+=================================================================
+
+=================================================================
+
+Bước 1/9 — SVM + LFCC
+Script: vispoofdb\models\train_lfcc_svm.py
+
+-----------------------------------------------------------------
+-----------------------------------------------------------------
+LỖI (exit code 1) sau 2.3s
+    Kiểm tra output bên trên để biết chi tiết lỗi.
+    Pipeline bị dừng lại.
+
