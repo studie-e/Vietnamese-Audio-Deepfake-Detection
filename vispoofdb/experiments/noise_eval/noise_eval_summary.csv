@@ -1,6 +1,0 @@
-scenario,detector,n_samples,accuracy,precision,recall,f1,eer
-clean,single,8,1.0,1.0,1.0,1.0,0.0
-noise_snr_20,single,8,0.75,0.6666666666666666,1.0,0.8,0.375
-noise_snr_10,single,8,0.625,0.5714285714285714,1.0,0.7272727272727273,0.25
-noise_snr_0,single,8,0.625,0.5714285714285714,1.0,0.7272727272727273,0.125
-telephone,single,8,1.0,1.0,1.0,1.0,0.0

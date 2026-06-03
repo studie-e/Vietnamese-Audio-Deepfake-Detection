@@ -1,9 +1,0 @@
-Metric,Old_Data,New_Data
-Total samples,14000,
-Real samples,8996,
-Fake samples,5004,
-Unique speakers,6,
-Train samples,8996,
-Test_Seen samples,2599,
-Test_Unseen samples,2600,
-Data size (GB),~1.4,
