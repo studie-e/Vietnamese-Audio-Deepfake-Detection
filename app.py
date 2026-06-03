@@ -90,7 +90,7 @@ st.markdown("""
 # ── Inference mode selector ─────────────────────────────────────────────────
 mode = st.selectbox(
     "Chế độ inference:",
-    ["Ensemble (5 models)", "Single model — SVM Wav2Vec", "Deep Learning — AASIST"]
+    ["Ensemble (3 models)", "Single model — SVM Wav2Vec", "Deep Learning — AASIST"]
 ) 
 
 
@@ -272,8 +272,8 @@ if uploaded_file:
             # Canh bao neu Wav2Vec2 khong co
             if not result.get("wav2vec_available", True) and not mode.startswith("Deep") and not mode.startswith("Single"):
                 st.warning(
-                    "Wav2Vec2 khong the tai duoc — Ensemble dang chay voi 4 model "
-                    "(khong co Wav2Vec+MLP). Ket qua van hop le."
+                    "Wav2Vec2 khong the tai duoc — Ensemble dang chay voi 2 model "
+                    "(SVM+LFCC va XGBoost+MFCC-Delta). Ket qua van hop le."
                 )
 
             if mode.startswith("Deep"):
