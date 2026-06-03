@@ -9,9 +9,9 @@ import numpy as np
 from pathlib import Path
 import sys
 
-# Import AASIST model từ vispoofdb/models/aasist/
-BASE_DIR = Path(__file__).resolve().parent
-AASIST_PKG = BASE_DIR / 'vispoofdb' / 'models' / 'aasist'
+# File nằm tại vispoofdb/models/aasist/ — import model từ cùng thư mục
+AASIST_PKG = Path(__file__).resolve().parent
+BASE_DIR = AASIST_PKG.parents[2]  # project root (3 levels up)
 sys.path.insert(0, str(AASIST_PKG))
 
 from models.baseline import Full_AASIST_Model

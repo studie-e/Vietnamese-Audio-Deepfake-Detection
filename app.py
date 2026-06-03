@@ -15,7 +15,7 @@ from thu_nghiem.src.xai.visualizer import (
     plot_mfcc_group_importance,
     plot_cross_model_heatmap,
 )
-from aasist_inference import AASISTDetector, AASISTXAIExplainer
+from vispoofdb.models.aasist.aasist_inference import AASISTDetector, AASISTXAIExplainer
 
 # ── Cấu hình trang ──────────────────────────────────────────────────────────
 st.set_page_config(

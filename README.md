@@ -1,36 +1,35 @@
-# Vietnamese Audio Deepfake Detection
+# Viet-Guard — Phát hiện Giọng nói Deepfake Tiếng Việt
 
-Hệ thống phát hiện giọng nói deepfake tiếng Việt — **Viet-Guard**.
+Hệ thống phát hiện giọng nói deepfake tiếng Việt sử dụng ensemble 3 nhóm đặc trưng âm học, kết hợp với mô hình học sâu AASIST và giải thích bằng XAI (SHAP / Gradient Saliency).
 
-Ensemble 3 model đại diện 3 nhóm feature khác nhau, kết hợp với XAI (SHAP / Gradient Saliency) và đánh giá robustness dưới nhiều điều kiện nhiễu thực tế.
-
-> **Seminar — Nhóm 17**
+> Seminar — Nhóm 17 | Viện Trí tuệ Nhân tạo | Trường Đại học Công nghệ
 
 ---
 
-## Tổng quan hệ thống
+## Kết quả thực nghiệm
 
-### 3 chế độ inference trong web app
+**Dataset:** ViSpoofDB — 14.195 mẫu | Train 8.996 | Test Seen 2.599 | Test Unseen 2.600
 
-| Chế độ | Model | Feature | Ghi chú |
-|---|---|---|---|
-| **Ensemble (3 models)** | SVM | LFCC (40d) | Spectral cổ điển |
-| | XGBoost | MFCC-Delta (480d) | Temporal |
-| | MLP | Wav2Vec2 (768d) | Deep semantic *(optional)* |
-| **Single model** | MLP | Wav2Vec2 | Standalone |
-| **Deep Learning** | AASIST | Raw waveform | Graph Neural Network |
+### Mô hình cơ sở
 
-### Kết quả thực nghiệm (Test Unseen — 21,195 samples)
+| Mô hình | Feature | Test Seen Acc | Test Seen EER | Test Unseen Acc | Test Unseen EER |
+|---|---|---:|---:|---:|---:|
+| SVM | LFCC (40d) | 83.11% | 20.14% | 93.42% | 4.64% |
+| MLP | Wav2Vec2 (768d) | 82.95% | 19.93% | 91.81% | 5.57% |
+| MLP | MFCC (40d) | 82.38% | 21.36% | 91.31% | 8.36% |
+| XGBoost | MFCC-Delta (480d) | 82.07% | 21.43% | 85.96% | 13.93% |
+| SVM | Tone-Aware (24d) | 73.87% | 26.00% | 74.46% | 25.43% |
+| **AASIST** | Raw waveform | **83.61%** | 21.14% | **97.19%** | **0.00%** |
 
-| Model | Accuracy | EER |
-|---|---:|---:|
-| SVM + LFCC | **96.79%** | 3.53% |
-| MLP + MFCC | 90.42% | **1.84%** |
-| XGBoost + MFCC-Delta | 84.71% | 15.39% |
-| MLP + Wav2Vec2 | 76.55% | 23.69% |
-| AASIST (Deep Learning) | 81.98% | — |
+### Ensemble & Fusion
 
-> Kết quả đầy đủ: `vispoofdb/experiments/results_summary_final.csv`
+| Phương pháp | Test Seen Acc | Test Seen EER | Test Unseen Acc | Test Unseen EER |
+|---|---:|---:|---:|---:|
+| Late Fusion (Soft Voting) | 84.11% | 18.50% | 94.62% | 4.93% |
+| Stacking (Logistic Meta) | 84.76% | 18.07% | 94.69% | **2.64%** |
+
+> Test Seen = Commercial TTS (FPT.AI, ElevenLabs) — thước đo thực tế hơn.  
+> Test Unseen = gTTS — nguồn TTS đơn giản chưa thấy trong training.
 
 ---
 
@@ -38,72 +37,72 @@ Ensemble 3 model đại diện 3 nhóm feature khác nhau, kết hợp với XAI
 
 ```
 Vietnamese-Audio-Deepfake-Detection/
-│
-├── app.py                        # Streamlit web app (3 chế độ)
-├── aasist_inference.py           # AASIST wrapper + XAI
-├── run_full_pipeline.py          # Chạy toàn bộ pipeline 7 bước
+├── app.py                            # Streamlit web app
+├── run_full_pipeline.py              # Chạy toàn bộ pipeline 7 bước
 ├── requirements.txt
+├── README.md
 │
-├── vispoofdb/                    # Package chính
-│   ├── data/                     # Dataset (gitignored — file lớn)
-│   │   ├── raw/                  # Dữ liệu gốc (~700 MB)
-│   │   ├── clean_data/           # Đã xử lý (~1.4 GB, 21K samples)
-│   │   │   ├── real/             # ~14,000 files
-│   │   │   ├── fake/             # ~7,195 files
-│   │   │   └── metadata.csv      # Nhãn + split info
-│   │   └── features_*/           # Features đã trích xuất (.npy)
+├── vispoofdb/                        # Package chính
+│   ├── data/                         # Dataset (lưu trên Google Drive)
+│   │   └── clean_data/metadata.csv   # Nhãn + split (file này được track)
 │   │
-│   ├── models/                   # Training scripts + ensemble
-│   │   ├── ensemble_system.py    # VietGuardEnsemble (3 model)
+│   ├── models/                       # Training scripts + model architectures
+│   │   ├── ensemble_system.py        # VietGuardEnsemble (3 model)
+│   │   ├── aasist/
+│   │   │   ├── aasist_inference.py   # AASIST inference wrapper + XAI
+│   │   │   ├── train_aasist_model.py
+│   │   │   └── models/baseline.py    # AASIST architecture
 │   │   ├── train_lfcc_svm.py
 │   │   ├── train_svm.py
 │   │   ├── train_mlp.py
 │   │   ├── train_wav2vec.py
 │   │   ├── train_xgboost.py
-│   │   ├── train_tone_svm.py
-│   │   ├── train_tone_xgboost.py
-│   │   ├── train_tone_fusion.py
-│   │   ├── train_aasist.py
-│   │   └── aasist/               # AASIST model architecture
+│   │   └── train_aasist.py
 │   │
-│   ├── models_saved/             # Model đã train (.pkl, .pth — gitignored)
+│   ├── models_saved/                 # Model đã train (lưu trên Google Drive)
 │   │
-│   ├── data_model/               # Feature extractors
-│   │   ├── wav2vec2.py           # Wav2Vec2 embeddings
-│   │   ├── tone_features.py      # F0, jitter, shimmer, HNR
-│   │   ├── lfcc_svm.py
-│   │   ├── mlp_features.py
-│   │   ├── svm_features.py
-│   │   └── xgboost_features.py
+│   ├── scripts/                      # Pipeline scripts
+│   │   ├── scripts_data_process.py   # Bước 1
+│   │   ├── scripts_feature_extract.py # Bước 2
+│   │   ├── scripts_train.py          # Bước 3 — train tất cả model
+│   │   ├── experiment_fusion.py      # Bước 4 — fusion experiments
+│   │   ├── plot_results.py           # Bước 5
+│   │   ├── eval_noise_augmentation.py # Bước 6 — noise robustness
+│   │   └── quantize.py               # Bước 7
 │   │
-│   ├── data_processing/          # Tiền xử lý dữ liệu thô
-│   │   ├── vidb_extract_mfcc.py
-│   │   ├── vidb_extract_processing.py
-│   │   ├── vispoofdb_clean_data.py
-│   │   └── vispoofdb_generate_metadata.py
-│   │
-│   ├── scripts/                  # Pipeline scripts
-│   │   ├── scripts_data_process.py       # Bước 1: Xử lý data
-│   │   ├── scripts_feature_extract.py    # Bước 2: Trích xuất features
-│   │   ├── scripts_train.py              # Bước 3: Train tất cả model
-│   │   ├── experiment_fusion.py          # Bước 4: Fusion experiments
-│   │   ├── plot_results.py               # Bước 5: Vẽ biểu đồ
-│   │   ├── eval_noise_augmentation.py    # Bước 6: Đánh giá noise robustness
-│   │   └── quantize.py                  # Bước 7: Tối ưu AASIST
-│   │
-│   ├── xai/                      # Explainability (SHAP + visualizer)
-│   │   ├── vispoofdb_xai.py      # VispoofdbAudioXAI (TreeSHAP / KernelSHAP)
-│   │   └── __init__.py
-│   │
-│   └── experiments/              # Kết quả thực nghiệm
-│       ├── results_summary_final.csv
-│       └── noise_eval/           # Kết quả đánh giá noise robustness
+│   ├── xai/vispoofdb_xai.py          # SHAP explainer
+│   ├── experiments/                  # Kết quả CSV + biểu đồ
+│   └── figures/                      # Biểu đồ ROC, DET, Confusion Matrix
 │
-└── thu_nghiem/                   # Code & data thử nghiệm ban đầu (legacy)
-    ├── src/                      # Codebase cũ (visualizer vẫn được dùng)
-    ├── data/                     # Data thử nghiệm
-    ├── figures/                  # Biểu đồ cũ
-    └── models_saved/             # Model cũ
+└── thu_nghiem/                       # Code & data thử nghiệm ban đầu (legacy)
+```
+
+---
+
+## Dataset
+
+Data **không** được lưu trong git (quá lớn). Tải về từ Google Drive:
+
+| Dataset | Link | Kích thước |
+|---|---|---|
+| **ViSpoofDB raw** (data chính) | [Google Drive](https://drive.google.com/drive/folders/1NZWOJi8g9nLfId1fSTkEc9Ay18P0c2LR?usp=sharing) | ~2.4 GB |
+| **Thu nghiem raw** (data thử nghiệm) | [Google Drive](https://drive.google.com/drive/folders/1Dt2kEhL8IFRJ3cIQNiuddiVPKwF5bqLC?usp=sharing) | ~274 MB |
+
+**Cấu trúc sau khi tải về:**
+```
+vispoofdb/data/
+├── raw/
+│   ├── real/       (~7.000 files WAV — VIVOS, VLSP)
+│   └── fake/
+│       ├── fpt/    (~2.000 files — FPT.AI TTS)
+│       ├── viettel/
+│       ├── elevenlabs/
+│       ├── coqui/
+│       └── gtts/   (test_unseen)
+└── clean_data/
+    ├── real/       (~14.000 files — augmented)
+    ├── fake/       (~7.195 files)
+    └── metadata.csv
 ```
 
 ---
@@ -118,69 +117,74 @@ python -m venv .venv
 pip install -r requirements.txt
 ```
 
-**Thư viện tùy chọn:**
-```bash
-pip install audiomentations    # Noise augmentation nâng cao
-# ffmpeg cần cài riêng nếu muốn test MP3 codec
-```
-
 ---
 
-## Chạy toàn bộ pipeline
+## Hướng dẫn chạy
 
-### Cách 1 — Chạy 1 lệnh (tất cả 7 bước)
+### Cách 1 — Chạy toàn bộ pipeline 1 lệnh
 
 ```bash
+# Chạy đủ 7 bước (bao gồm Wav2Vec2 — mất 1-7 giờ)
 python run_full_pipeline.py
-```
 
-Bỏ qua Wav2Vec2 nếu chưa trích xuất (tiết kiệm ~1-7 tiếng):
-```bash
+# Bỏ Wav2Vec2 để tiết kiệm thời gian
 python run_full_pipeline.py --skip-wav2vec
-```
 
-Tự động tắt máy sau khi xong:
-```bash
+# Tự động tắt máy sau khi xong
 python run_full_pipeline.py --shutdown
 ```
 
 ### Cách 2 — Chạy từng bước thủ công
 
-| Bước | Script | Mô tả | Thời gian ước tính |
-|---|---|---|---:|
-| 1 | `vispoofdb/scripts/scripts_data_process.py` | Download & xử lý data thô | ~10 phút |
-| 2 | `vispoofdb/scripts/scripts_feature_extract.py` | Trích xuất MFCC, LFCC, Wav2Vec2 | ~1-7 giờ |
-| 3 | `vispoofdb/scripts/scripts_train.py` | Train tất cả model | ~30 phút |
-| 4 | `vispoofdb/scripts/experiment_fusion.py` | Thử nghiệm fusion | ~10 phút |
-| 5 | `vispoofdb/scripts/plot_results.py` | Vẽ biểu đồ kết quả | ~2 phút |
-| 6 | `vispoofdb/scripts/eval_noise_augmentation.py` | Đánh giá robustness với noise | ~15 phút |
-| 7 | `vispoofdb/scripts/quantize.py` | Nén AASIST model | ~5 phút |
+| Bước | Lệnh | Mô tả | Thời gian |
+|---:|---|---|---:|
+| 1 | `python vispoofdb/scripts/scripts_data_process.py` | Xử lý & tạo metadata | ~5 phút |
+| 2 | `python vispoofdb/scripts/scripts_feature_extract.py` | Trích xuất features | ~1–7 giờ |
+| 3 | `python vispoofdb/scripts/scripts_train.py` | Train tất cả model | ~30 phút |
+| 4 | `python vispoofdb/scripts/experiment_fusion.py` | Fusion experiments | ~15 phút |
+| 5 | `python vispoofdb/scripts/plot_results.py` | Vẽ biểu đồ | ~2 phút |
+| 6 | `python vispoofdb/scripts/eval_noise_augmentation.py` | Đánh giá noise | ~15 phút |
+| 7 | `python vispoofdb/scripts/quantize.py` | Nén AASIST | ~5 phút |
 
+**Bỏ qua Wav2Vec2 (nếu chưa có features):**
 ```bash
-python vispoofdb/scripts/scripts_data_process.py
-python vispoofdb/scripts/scripts_feature_extract.py
-python vispoofdb/scripts/scripts_train.py
-# ...
-```
-
-### Chỉ train lại model (đã có features)
-
-```bash
-# Tất cả model
-python vispoofdb/scripts/scripts_train.py
-
-# Bỏ qua Wav2Vec2
 python vispoofdb/scripts/scripts_train.py --skip-wav2vec
-
-# Bỏ cả Wav2Vec2 và Tone models
-python vispoofdb/scripts/scripts_train.py --skip-wav2vec --skip-tone
-
-# Train từng model riêng
-python vispoofdb/models/train_lfcc_svm.py
-python vispoofdb/models/train_xgboost.py
-python vispoofdb/models/train_wav2vec.py
-python vispoofdb/models/train_aasist.py
 ```
+
+### Train riêng từng model
+
+```bash
+python vispoofdb/models/train_lfcc_svm.py       # SVM + LFCC (~30 giây)
+python vispoofdb/models/train_svm.py            # SVM + MFCC
+python vispoofdb/models/train_mlp.py            # MLP + MFCC
+python vispoofdb/models/train_xgboost.py        # XGBoost + MFCC-Delta (~20 phút)
+python vispoofdb/models/train_wav2vec.py        # MLP + Wav2Vec2
+python vispoofdb/models/aasist/train_aasist_model.py  # AASIST (~2 giờ trên T4 GPU)
+```
+
+---
+
+## Chạy trên Google Colab (T4 GPU)
+
+```python
+# 1. Mount Google Drive
+from google.colab import drive
+drive.mount('/content/drive')
+
+# 2. Clone repo
+import os
+os.chdir('/content/drive/MyDrive')
+!git clone https://github.com/studie-e/Vietnamese-Audio-Deepfake-Detection.git
+os.chdir('Vietnamese-Audio-Deepfake-Detection')
+
+# 3. Cài đặt dependencies
+!pip install -r requirements.txt -q
+
+# 4. Chạy pipeline (data đã có trên Drive)
+!python vispoofdb/scripts/scripts_train.py --skip-wav2vec
+```
+
+> Data raw cần upload lên Google Drive trước theo cấu trúc `vispoofdb/data/` như trên.
 
 ---
 
@@ -190,67 +194,28 @@ python vispoofdb/models/train_aasist.py
 streamlit run app.py
 ```
 
-Mở trình duyệt: `http://localhost:8501`
+Mở: `http://localhost:8501`
 
-**Tính năng:**
-- **Ensemble (3 models)**: SVM+LFCC × XGBoost+MFCC-Delta × MLP+Wav2Vec2 — soft voting
-- **Single model**: MLP + Wav2Vec2
-- **Deep Learning**: AASIST (Graph Neural Network)
-- **XAI tab**: SHAP (TreeSHAP cho XGBoost, KernelSHAP cho Wav2Vec2) hoặc Gradient Saliency (AASIST)
+**3 chế độ:**
+- **Ensemble (3 models):** SVM+LFCC × XGBoost+MFCC-Delta × MLP+Wav2Vec2 — soft voting
+- **Single model:** MLP + Wav2Vec2
+- **Deep Learning:** AASIST (97.19% Test Unseen)
 
-> Nếu Wav2Vec2 không tải được (offline), Ensemble tự động chạy với 2 model còn lại.
+**XAI tab:**
+- TreeSHAP / KernelSHAP cho sklearn models
+- Gradient Saliency cho AASIST
 
----
-
-## Đánh giá Noise Robustness
-
-Script `eval_noise_augmentation.py` **không phải data augmentation để train** — nó test mô hình đã train với âm thanh bị làm nhiễu, đánh giá xem model có còn nhận diện được không.
-
-Các scenario được test:
-
-| Scenario | Mô tả |
-|---|---|
-| `clean` | Âm thanh gốc (baseline) |
-| `noise_snr_20/10/0` | Nhiễu trắng ở các mức SNR |
-| `telephone` | Lọc dải tần điện thoại (300–3400 Hz) |
-| `mp3_128k/64k/32k` | Nén MP3 (mô phỏng gửi qua Zalo/Messenger) |
-
-Kết quả đã có (tóm tắt):
-
-| Scenario | AASIST EER | Wav2Vec+MLP EER |
-|---|---:|---:|
-| clean | **0.00** | 0.12 |
-| noise SNR 10 dB | 0.16 | **0.62** |
-| telephone | **0.00** | 0.32 |
-| mp3_32k | **0.00** | 0.18 |
-
-→ AASIST rất robust. Wav2Vec+MLP bị ảnh hưởng nặng khi có noise.
-
-Kết quả lưu tại: `vispoofdb/experiments/noise_eval/`
+> Nếu Wav2Vec2 không tải được (offline/thiếu model), Ensemble tự động fallback sang 2 model.
 
 ---
 
 ## Yêu cầu phần cứng
 
-| Thành phần | Tối thiểu | Khuyến nghị |
+| | Tối thiểu | Khuyến nghị |
 |---|---|---|
-| RAM | 8 GB | 16 GB+ |
-| GPU | Không bắt buộc | NVIDIA CUDA (train nhanh hơn) |
-| Disk | 5 GB (chỉ features) | 10 GB+ (cả raw data) |
+| RAM | 8 GB | 16 GB |
+| GPU | Không bắt buộc | NVIDIA CUDA (cho AASIST) |
+| Disk | 3 GB (chỉ features) | 6 GB (đủ pipeline) |
 
-> AMD GPU không hỗ trợ CUDA — PyTorch sẽ tự fallback sang CPU.
-> Wav2Vec2 chạy CPU mode trên RAM ~4–6 GB, khoảng 1–7 giờ tùy dataset.
-
----
-
-## Log kết quả
-
-Mỗi lần chạy `scripts_train.py` tạo ra file log tại thư mục gốc:
-```
-training_results_YYYYMMDD_HHMMSS.txt
-```
-
-Mỗi bước trong `run_full_pipeline.py` ghi log tại:
-```
-logs/<script_name>.log
-```
+> AMD GPU không hỗ trợ CUDA — PyTorch fallback CPU.  
+> Wav2Vec2 feature extraction: ~1–7 giờ trên CPU với 14K files.
