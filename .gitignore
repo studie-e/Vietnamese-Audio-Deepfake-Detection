@@ -16,12 +16,28 @@ keys.py
 *.pt
 *.pth
 
+# Audio files (raw data — quá lớn)
+*.wav
+*.mp3
+*.flac
+*.ogg
+*.m4a
+
 # Thư mục dữ liệu trung gian (feature files - quá lớn)
-data/features_*/
-data/clean_data/
-vispoofdb/data/features_*/
-vispoofdb/data/clean_data/
+thu_nghiem/data/
+vispoofdb/data/
 
 # Thư mục lưu model đã train
 models_saved/
 vispoofdb/models_saved/
+thu_nghiem/models_saved/
+
+# Logs & scratch files
+training_results_*.txt
+logs/
+seminar_content.txt
+
+# OS / Editor
+.DS_Store
+Thumbs.db
+*.swp
