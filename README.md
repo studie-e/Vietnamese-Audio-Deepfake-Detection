@@ -329,8 +329,6 @@ streamlit run app.py
 |---|---|
 | White noise | Cả 2 model chính đều sụt xuống ~50% (random guess) khi SNR thấp |
 | AASIST inference | Chậm trên CPU (~3–5 giây/file), cần GPU cho production |
-| Tone-Aware features | Kém hiệu quả (~74%) so với spectral features (~83–93%) |
-| Test Unseen bias | gTTS là TTS đơn giản nên kết quả unseen cao hơn thực tế |
 
 ### Hướng phát triển
 
