@@ -19,7 +19,7 @@ MODELS_DIR = BASE / 'vispoofdb' / 'models_saved'
 EXPERIMENT_DIR = BASE / 'vispoofdb' / 'experiments'
 FIG_DIR = BASE / 'vispoofdb' / 'figures'
 FIG_DIR.mkdir(parents=True, exist_ok=True)
-AASIST_DIR = BASE / 'AASIST'
+AASIST_DIR = BASE / 'vispoofdb' / 'models' / 'aasist'
 
 # Fix encoding for Windows terminal
 if sys.stdout.encoding != 'utf-8':

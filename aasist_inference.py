@@ -9,15 +9,12 @@ import numpy as np
 from pathlib import Path
 import sys
 
-# Add AASIST to path
+# Import AASIST model từ vispoofdb/models/aasist/
 BASE_DIR = Path(__file__).resolve().parent
-AASIST_DIR = BASE_DIR / 'AASIST'
-sys.path.insert(0, str(AASIST_DIR))
+AASIST_PKG = BASE_DIR / 'vispoofdb' / 'models' / 'aasist'
+sys.path.insert(0, str(AASIST_PKG))
 
-try:
-    from AASIST.models.baseline import Full_AASIST_Model
-except:
-    from models.baseline import Full_AASIST_Model
+from models.baseline import Full_AASIST_Model
 
 
 class AASISTDetector:

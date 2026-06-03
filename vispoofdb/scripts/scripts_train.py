@@ -38,7 +38,14 @@ import subprocess
 import sys
 import time
 import os
+import datetime
 from pathlib import Path
+
+# Fix encoding cho terminal Windows
+if sys.stdout.encoding != 'utf-8':
+    sys.stdout.reconfigure(encoding='utf-8')
+if sys.stderr.encoding != 'utf-8':
+    sys.stderr.reconfigure(encoding='utf-8')
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Cấu hình
@@ -49,6 +56,11 @@ PYTHON      = sys.executable
 
 # Đảm bảo UTF-8 encoding cho subprocess
 os.environ['PYTHONIOENCODING'] = 'utf-8'
+
+# File lưu kết quả
+_timestamp  = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+LOG_FILE    = BASE_DIR / f"training_results_{_timestamp}.txt"
+_log_lines: list[str] = []  # buffer ghi log
 
 SKIP_WAV2VEC = "--skip-wav2vec" in sys.argv
 SKIP_TONE    = "--skip-tone"    in sys.argv
@@ -119,30 +131,57 @@ PIPELINE = [
 # Helpers
 # ─────────────────────────────────────────────────────────────────────────────
 
+def _log(text: str = ""):
+    """In ra màn hình và lưu vào buffer log."""
+    print(text)
+    _log_lines.append(text)
+
 def separator(char="=", width=65):
-    print(char * width)
+    _log(char * width)
+
+def _save_log():
+    """Ghi toàn bộ log ra file."""
+    try:
+        LOG_FILE.write_text("\n".join(_log_lines), encoding="utf-8")
+        print(f"\n[LOG] Kết quả đã lưu tại: {LOG_FILE}")
+    except Exception as exc:
+        print(f"[WARN] Không thể lưu file log: {exc}")
 
 def run_step(script_path: Path, description: str) -> bool:
     separator()
-    print(f"\n{description}")
-    print(f"Script: {script_path.relative_to(BASE_DIR)}\n")
+    _log(f"\n{description}")
+    _log(f"Script: {script_path.relative_to(BASE_DIR)}\n")
     separator("-")
 
-    start  = time.time()
-    # Prepare environment with UTF-8 encoding for subprocess
-    env = os.environ.copy()
+    start = time.time()
+    env   = os.environ.copy()
     env['PYTHONIOENCODING'] = 'utf-8'
-    result = subprocess.run([PYTHON, str(script_path)], cwd=str(BASE_DIR), text=True, env=env)
+
+    result = subprocess.run(
+        [PYTHON, str(script_path)],
+        cwd=str(BASE_DIR),
+        text=True,
+        capture_output=True,
+        env=env,
+    )
     elapsed = time.time() - start
+
+    # In và ghi stdout của sub-script
+    if result.stdout:
+        for line in result.stdout.splitlines():
+            _log(line)
+    if result.stderr:
+        for line in result.stderr.splitlines():
+            _log(line)
 
     separator("-")
     if result.returncode == 0:
-        print(f"Hoàn thành trong {elapsed:.1f}s ({elapsed/60:.1f} phút)\n")
+        _log(f"Hoàn thành trong {elapsed:.1f}s ({elapsed/60:.1f} phút)\n")
         return True
     else:
-        print(f"LỖI (exit code {result.returncode}) sau {elapsed:.1f}s")
-        print("    Kiểm tra output bên trên để biết chi tiết lỗi.")
-        print("    Pipeline bị dừng lại.\n")
+        _log(f"LỖI (exit code {result.returncode}) sau {elapsed:.1f}s")
+        _log("    Kiểm tra output bên trên để biết chi tiết lỗi.")
+        _log("    Pipeline bị dừng lại.\n")
         return False
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -150,14 +189,16 @@ def run_step(script_path: Path, description: str) -> bool:
 # ─────────────────────────────────────────────────────────────────────────────
 
 def main():
+    _log_lines.append(f"Thời gian bắt đầu: {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+    _log_lines.append("")
     separator()
-    print("  VISPOOFDB — MODEL TRAINING PIPELINE")
+    _log("  VISPOOFDB — MODEL TRAINING PIPELINE")
     if SKIP_WAV2VEC:
-        print("  [skip] train_wav2vec.py — Wav2Vec2 features chưa có")
+        _log("  [skip] train_wav2vec.py — Wav2Vec2 features chưa có")
     if SKIP_TONE:
-        print("  [skip] train_tone_*.py  — Tone-Aware features chưa có")
+        _log("  [skip] train_tone_*.py  — Tone-Aware features chưa có")
     separator()
-    print()
+    _log()
 
     # Kiểm tra feature files cơ bản
     required_checks = [
@@ -185,10 +226,11 @@ def main():
 
     missing = [label for path, label in required_checks if not path.exists()]
     if missing:
-        print("[ERROR] Thiếu các file feature sau:")
+        _log("[ERROR] Thiếu các file feature sau:")
         for m in missing:
-            print(f"    - {m}")
-        print("\n    Hãy chạy scripts_feature_extract.py trước!")
+            _log(f"    - {m}")
+        _log("\n    Hãy chạy scripts_feature_extract.py trước!")
+        _save_log()
         sys.exit(1)
 
     total_start = time.time()
@@ -199,17 +241,18 @@ def main():
     for script_path, description, skip in PIPELINE:
         if skip:
             separator()
-            print(f"\n[BỎ QUA] {description}")
-            print()
+            _log(f"\n[BỎ QUA] {description}")
+            _log()
             skipped += 1
             continue
 
         if not script_path.exists():
-            print(f"[WARN] Không tìm thấy file: {script_path}, bỏ qua.")
+            _log(f"[WARN] Không tìm thấy file: {script_path}, bỏ qua.")
             continue
 
         success = run_step(script_path, description)
         if not success:
+            _save_log()
             sys.exit(1)
 
         results.append(description)
@@ -217,11 +260,17 @@ def main():
 
     total_elapsed = time.time() - total_start
     separator()
-    print(f"\nHOAN THANH! ({completed} mô hình đã huấn luyện, {skipped} bị bỏ qua)")
-    print(f"    Tổng thời gian: {total_elapsed/60:.1f} phút")
-    print()
-    print("    Các mô hình đã lưu tại: vispoofdb/models_saved/")
+    _log(f"\nHOAN THANH! ({completed} mô hình đã huấn luyện, {skipped} bị bỏ qua)")
+    _log(f"    Tổng thời gian: {total_elapsed/60:.1f} phút")
+    _log()
+    _log("    Các mô hình đã train:")
+    for r in results:
+        _log(f"      ✓ {r}")
+    _log()
+    _log("    Các mô hình đã lưu tại: vispoofdb/models_saved/")
+    _log(f"    Thời gian kết thúc: {datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
     separator()
+    _save_log()
 
 
 if __name__ == "__main__":

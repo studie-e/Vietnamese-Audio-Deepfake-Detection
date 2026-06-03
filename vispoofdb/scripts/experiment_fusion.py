@@ -190,7 +190,7 @@ try:
     
     if aasist_model_path.exists() and metadata_path.exists():
         from pathlib import Path as P
-        aasist_root = BASE / 'AASIST'
+        aasist_root = BASE / 'vispoofdb' / 'models' / 'aasist'
         sys.path.insert(0, str(aasist_root))
         
         from dataset import AudioDataset

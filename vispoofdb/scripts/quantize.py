@@ -178,14 +178,10 @@ def main():
 
     print("Loading model checkpoint...")
     try:
-        import sys
-        sys.path.insert(0, ".")
-        # Prefer local AASIST package if available
-        try:
-            from AASIST.models.baseline import Full_AASIST_Model as AASISTModel
-        except Exception:
-            # fallback to generic import used previously
-            from models.AASIST import AASISTModel
+        # Import AASIST tu vispoofdb/models/aasist/
+        aasist_pkg = Path(__file__).resolve().parents[2] / 'vispoofdb' / 'models' / 'aasist'
+        sys.path.insert(0, str(aasist_pkg))
+        from models.baseline import Full_AASIST_Model as AASISTModel
 
         model = AASISTModel()
         ckpt = torch.load(str(model_path), map_location="cpu")
@@ -202,16 +198,18 @@ def main():
         try:
             import pandas as pd
             import soundfile as sf
-            meta = Path('vispoofdb/data/clean_data/metadata.csv')
+            base_dir = Path(__file__).resolve().parents[2]
+            meta = base_dir / 'vispoofdb' / 'data' / 'clean_data' / 'metadata.csv'
             if meta.exists():
                 df = pd.read_csv(meta)
                 sample = df[df['split'].str.contains('test', na=False)].sample(50, random_state=42)
                 for _, row in sample.iterrows():
                     try:
-                        audio, sr = sf.read(row['file_path'], dtype='float32', always_2d=False)
+                        full_path = meta.parent / row['file_path']
+                        audio, sr = sf.read(str(full_path), dtype='float32', always_2d=False)
                         label = 0 if row['label'] == 'real' else 1
                         test_pairs.append((audio, label))
-                    except Exception:
+                    except Exception as e:
                         pass
         except Exception as e:
             print('Failed to load test samples:', e)

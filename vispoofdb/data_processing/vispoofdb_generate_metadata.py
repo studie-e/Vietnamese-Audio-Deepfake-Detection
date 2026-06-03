@@ -157,21 +157,36 @@ def assign_splits(df: pd.DataFrame) -> pd.DataFrame:
         
         # 3. Tính toán số lượng người nói cho từng tập
         n_spk = len(shuffled_speakers)
-        train_cut = int(n_spk * 0.60)
-        test_seen_cut = train_cut + int(n_spk * 0.20)
         
-        train_spk = set(shuffled_speakers[:train_cut])
-        test_seen_spk = set(shuffled_speakers[train_cut:test_seen_cut])
-        # Phần còn lại tự động thuộc test_unseen
-        
-        # 4. Gán nhãn cho file dựa vào người nói thuộc tập nào
-        def map_real_split(file_id):
-            spk = file_id.split('_')[0]
-            if spk in train_spk: return "train"
-            elif spk in test_seen_spk: return "test_seen"
-            else: return "test_unseen"
+        # Nếu không trích xuất được speaker ID (ví dụ tất cả file bị đặt tên dạng audio_0000.wav),
+        # ta chia ngẫu nhiên trực tiếp theo tỷ lệ 60/20/20
+        if n_spk <= 1:
+            print("  [INFO] Khong tim thay speaker ID hop le cho REAL (co the do file bi doi ten). Chia ngau nhien 60/20/20 cho REAL.")
+            shuffled_files = real_df.sample(frac=1, random_state=42)
+            n_files = len(shuffled_files)
+            train_cut = int(n_files * 0.60)
+            test_seen_cut = train_cut + int(n_files * 0.20)
             
-        real_df["split"] = real_df["file_id"].apply(map_real_split)
+            real_df.loc[shuffled_files.index[:train_cut], "split"] = "train"
+            real_df.loc[shuffled_files.index[train_cut:test_seen_cut], "split"] = "test_seen"
+            real_df.loc[shuffled_files.index[test_seen_cut:], "split"] = "test_unseen"
+        else:
+            train_cut = int(n_spk * 0.60)
+            test_seen_cut = train_cut + int(n_spk * 0.20)
+            
+            train_spk = set(shuffled_speakers[:train_cut])
+            test_seen_spk = set(shuffled_speakers[train_cut:test_seen_cut])
+            # Phần còn lại tự động thuộc test_unseen
+            
+            # 4. Gán nhãn cho file dựa vào người nói thuộc tập nào
+            def map_real_split(file_id):
+                spk = file_id.split('_')[0]
+                if spk in train_spk: return "train"
+                elif spk in test_seen_spk: return "test_seen"
+                else: return "test_unseen"
+                
+            real_df["split"] = real_df["file_id"].apply(map_real_split)
+            
         result_parts.append(real_df)
 
     # ── FAKE: Handle gtts vs others separately (GIỮ NGUYÊN LOGIC CỦA BẠN)

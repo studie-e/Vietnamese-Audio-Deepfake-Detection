@@ -26,6 +26,12 @@ import sys
 import time
 from pathlib import Path
 
+# Fix encoding cho terminal Windows
+if sys.stdout.encoding != 'utf-8':
+    sys.stdout.reconfigure(encoding='utf-8')
+if sys.stderr.encoding != 'utf-8':
+    sys.stderr.reconfigure(encoding='utf-8')
+
 # ─────────────────────────────────────────────────────────────────────────────
 # Cấu hình
 # ─────────────────────────────────────────────────────────────────────────────

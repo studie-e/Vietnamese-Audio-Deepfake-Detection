@@ -6,7 +6,7 @@ import numpy as np
 import joblib
 import torch
 from transformers import Wav2Vec2Processor, Wav2Vec2Model
-from src.data_processing.ensemble_system import VietGuardEnsemble
+from vispoofdb.models.ensemble_system import VietGuardEnsemble
 from vispoofdb.xai import VispoofdbAudioXAI
 from src.xai.visualizer import (
     plot_waterfall,
@@ -135,10 +135,10 @@ class SingleWav2VecDetector:
 @st.cache_resource(show_spinner=False)
 def load_system(mode_name="ensemble"):
     if mode_name == "single":
-        model_p = os.path.join("vispoofdb", "models_saved", "mlp_on_wav2vec.pkl")
+        model_p = os.path.join("vispoofdb", "models_saved", "mlp_wav2vec_model.pkl")
         scaler_p = os.path.join("vispoofdb", "models_saved", "scaler_wav2vec.pkl")
         if not os.path.exists(model_p) or not os.path.exists(scaler_p):
-            raise FileNotFoundError("Không tìm thấy SVM Wav2Vec model/scaler")
+            raise FileNotFoundError("Không tìm thấy MLP Wav2Vec model/scaler")
         det = SingleWav2VecDetector(model_p, scaler_p)
         xai = VispoofdbAudioXAI(det, n_background=8)
         return det, xai
@@ -238,7 +238,11 @@ if uploaded_file:
             else:
                 model_names = ["SVM + Wav2Vec2"]
         else:
-            model_names = ["LFCC+SVM", "Wav2Vec+MLP", "MFCC+SVM", "XGBoost", "MFCC+MLP"]
+            # Uu tien model_names tra ve tu ensemble (phan anh dung khi Wav2Vec2 bi skip)
+            model_names = result.get(
+                "model_names",
+                ["LFCC+SVM", "Wav2Vec+MLP", "MFCC+SVM", "XGBoost", "MFCC+MLP"]
+            )
 
         # ── Tabs ─────────────────────────────────────────────────────────
         tab_detect, tab_xai = st.tabs(["Kết quả Phát hiện", "Giải thích XAI"])
@@ -264,8 +268,14 @@ if uploaded_file:
                 st.pyplot(fig_gauge, use_container_width=False)
 
             st.divider()
-            
-            # Show model details based on mode
+
+            # Canh bao neu Wav2Vec2 khong co
+            if not result.get("wav2vec_available", True) and not mode.startswith("Deep") and not mode.startswith("Single"):
+                st.warning(
+                    "Wav2Vec2 khong the tai duoc — Ensemble dang chay voi 4 model "
+                    "(khong co Wav2Vec+MLP). Ket qua van hop le."
+                )
+
             if mode.startswith("Deep"):
                 st.markdown("#### 🧠 Thông tin mô hình")
                 model_info = detector.get_model_info()

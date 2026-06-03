@@ -190,14 +190,25 @@ class VispoofdbAudioXAI:
         return self._pack(sv, base, _mfcc480_names())
 
     def _explain_w2v(self, w2v: np.ndarray) -> dict | None:
-        if w2v is None or not hasattr(self.detector, "model") or not hasattr(self.detector, "scaler"):
+        if w2v is None:
             return None
+
+        # Ho tro ca SingleWav2VecDetector (model/scaler) va VietGuardEnsemble (mlp_w2v/scaler_w2v)
+        if hasattr(self.detector, "model") and hasattr(self.detector, "scaler"):
+            clf    = self.detector.model
+            scaler = self.detector.scaler
+        elif hasattr(self.detector, "mlp_w2v") and hasattr(self.detector, "scaler_w2v"):
+            clf    = self.detector.mlp_w2v
+            scaler = self.detector.scaler_w2v
+        else:
+            return None
+
         if self._w2v_kernel_explainer is None:
             n_features = w2v.shape[1]
             background = np.zeros((self.n_background, n_features), dtype=float)
 
             def predict_fn(X):
-                return _safe_predict_proba(self.detector.model, self.detector.scaler, np.asarray(X, dtype=float))
+                return _safe_predict_proba(clf, scaler, np.asarray(X, dtype=float))
 
             self._w2v_kernel_explainer = shap.KernelExplainer(predict_fn, background)
 
@@ -218,6 +229,7 @@ class VispoofdbAudioXAI:
         group_size = 64
         grouped_sv, grouped_names = self._group_values(sv, _wav2vec_group_names(len(sv), group_size), group_size=group_size)
         return self._pack(grouped_sv, base, grouped_names)
+
 
     def explain(self, y: np.ndarray, sr: int) -> dict:
         """Explain the current audio sample using whichever Vispoofdb model is available."""

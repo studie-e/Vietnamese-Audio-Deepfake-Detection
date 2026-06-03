@@ -32,6 +32,7 @@ from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_sc
 import joblib
 import matplotlib.pyplot as plt
 try:
+    # pyrefly: ignore [missing-import]
     from audiomentations import Compose, AddGaussianNoise, RoomSimulator, Mp3Compression, LowPassFilter, HighPassFilter, TimeStretch, PitchShift, Gain
     AUDIOMENTATIONS_AVAILABLE = True
 except Exception:
@@ -164,8 +165,8 @@ class AASISTDetector:
         
         self.device = device or torch.device("cuda" if torch.cuda.is_available() else "cpu")
         
-        # Add AASIST to path
-        aasist_root = Path(__file__).resolve().parents[2] / 'AASIST'
+        # Import AASIST tu vispoofdb/models/aasist/
+        aasist_root = Path(__file__).resolve().parents[2] / 'vispoofdb' / 'models' / 'aasist'
         sys.path.insert(0, str(aasist_root))
         
         from models.baseline import Full_AASIST_Model
@@ -270,9 +271,14 @@ def load_metadata():
 
 
 def build_file_path(row):
-    # metadata file_path is relative to vispoofdb/data/raw
-    base = Path('vispoofdb/data/raw')
-    return str((base / row['file_path']).resolve())
+    # Try clean_data first, then fallback to raw
+    p_clean = Path('vispoofdb/data/clean_data') / row['file_path']
+    if p_clean.exists():
+        return str(p_clean.resolve())
+    p_raw = Path('vispoofdb/data/raw') / row['file_path']
+    if p_raw.exists():
+        return str(p_raw.resolve())
+    return str(p_clean.resolve())
 
 
 def evaluate_all_models(args):
