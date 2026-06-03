@@ -8,7 +8,7 @@ import torch
 from transformers import Wav2Vec2Processor, Wav2Vec2Model
 from vispoofdb.models.ensemble_system import VietGuardEnsemble
 from vispoofdb.xai import VispoofdbAudioXAI
-from src.xai.visualizer import (
+from thu_nghiem.src.xai.visualizer import (
     plot_waterfall,
     plot_ensemble_weights,
     plot_confidence_gauge,

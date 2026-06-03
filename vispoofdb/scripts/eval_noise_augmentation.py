@@ -528,7 +528,7 @@ def evaluate(args):
 
     # ensemble if possible
     try:
-        from src.data_processing.ensemble_system import VietGuardEnsemble
+        from vispoofdb.models.ensemble_system import VietGuardEnsemble
         try:
             detectors['ensemble'] = VietGuardEnsemble(models_dir='vispoofdb/models_saved')
             print('Loaded VietGuardEnsemble')
