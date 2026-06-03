@@ -16,23 +16,28 @@ keys.py
 *.pt
 *.pth
 
-# Audio files (raw data — quá lớn)
+# Audio files raw — 2.4 GB, giữ trên Google Drive
 *.wav
 *.mp3
 *.flac
 *.ogg
 *.m4a
 
-# Thư mục dữ liệu trung gian (feature files - quá lớn)
-thu_nghiem/data/
-vispoofdb/data/
+# Feature files (trung gian, generate được từ code)
+vispoofdb/data/features_*/
+vispoofdb/data/clean_data/
+thu_nghiem/data/features_*/
+thu_nghiem/data/clean_data/
 
-# Thư mục lưu model đã train
-models_saved/
+# Raw audio data chính (2.4 GB — lưu trên Google Drive)
+vispoofdb/data/raw/
+
+# Models đã train (generate được bằng cách chạy lại)
 vispoofdb/models_saved/
 thu_nghiem/models_saved/
+models_saved/
 
-# Logs & scratch files
+# Logs & temp files
 training_results_*.txt
 logs/
 seminar_content.txt
