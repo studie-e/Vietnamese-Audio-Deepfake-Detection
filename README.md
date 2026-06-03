@@ -1,221 +1,341 @@
-# Viet-Guard — Phát hiện Giọng nói Deepfake Tiếng Việt
+<div align="center">
 
-Hệ thống phát hiện giọng nói deepfake tiếng Việt sử dụng ensemble 3 nhóm đặc trưng âm học, kết hợp với mô hình học sâu AASIST và giải thích bằng XAI (SHAP / Gradient Saliency).
+# Viet-Guard
+### Vietnamese Audio Deepfake Detection
 
-> Seminar — Nhóm 17 | Viện Trí tuệ Nhân tạo | Trường Đại học Công nghệ
+*Phát hiện giọng nói deepfake tiếng Việt sử dụng Ensemble đặc trưng âm học đa nhóm và học sâu AASIST*
+
+![Python](https://img.shields.io/badge/Python-3.10%2B-blue?logo=python&logoColor=white)
+![PyTorch](https://img.shields.io/badge/PyTorch-2.x-EE4C2C?logo=pytorch&logoColor=white)
+![Streamlit](https://img.shields.io/badge/Streamlit-App-FF4B4B?logo=streamlit&logoColor=white)
+![scikit-learn](https://img.shields.io/badge/scikit--learn-1.x-F7931E?logo=scikit-learn&logoColor=white)
+![License](https://img.shields.io/badge/License-MIT-green)
+
+*Seminar — Nhóm 17 | Viện Trí tuệ Nhân tạo | Trường Đại học Công nghệ*
 
 ---
 
-## Kết quả thực nghiệm
+</div>
 
-**Dataset:** ViSpoofDB — 14.195 mẫu | Train 8.996 | Test Seen 2.599 | Test Unseen 2.600
+## Mục lục
+
+1. [Tóm tắt](#1-tóm-tắt)
+2. [Mục tiêu nghiên cứu](#2-mục-tiêu-nghiên-cứu)
+3. [Dataset](#3-dataset)
+4. [Kiến trúc hệ thống](#4-kiến-trúc-hệ-thống)
+5. [Các mô hình](#5-các-mô-hình)
+6. [XAI — Giải thích mô hình](#6-xai--giải-thích-mô-hình)
+7. [Cấu trúc thư mục](#7-cấu-trúc-thư-mục)
+8. [Cài đặt](#8-cài-đặt)
+9. [Hướng dẫn chạy](#9-hướng-dẫn-chạy)
+10. [Web App](#10-web-app)
+11. [Giới hạn và hướng phát triển](#11-giới-hạn-và-hướng-phát-triển)
+
+---
+
+## 1. Tóm tắt
+
+Sự bùng nổ của công nghệ Text-to-Speech (TTS) và Voice Conversion (VC) đặt ra thách thức nghiêm trọng trong việc xác thực giọng nói số. **Viet-Guard** là hệ thống phát hiện giọng nói deepfake tiếng Việt được xây dựng theo hướng tiếp cận đa đặc trưng:
+
+- Kết hợp 3 nhóm đặc trưng âm học: **Spectral (LFCC)**, **Temporal (MFCC-Delta)**, **Semantic (Wav2Vec2)**
+- Triển khai **Soft-Voting Ensemble** để tổng hợp quyết định
+- Tích hợp **AASIST** (mô hình học sâu xử lý raw waveform) làm so sánh baseline mạnh
+- Cung cấp **giải thích mô hình** (XAI) thông qua SHAP và Gradient-based Saliency
+
+---
+
+## 2. Mục tiêu nghiên cứu
+
+| Mục tiêu | Mô tả |
+|---|---|
+| **So sánh đặc trưng** | Đánh giá hiệu quả các nhóm feature (MFCC, LFCC, Wav2Vec2, Tone-Aware) trên tiếng Việt |
+| **Ensemble learning** | Khảo sát Soft Voting, Stacking, Early Fusion trên bài toán phát hiện deepfake |
+| **Generalization** | Kiểm tra khả năng tổng quát hoá trên nguồn TTS chưa thấy trong training |
+| **Robustness** | Đánh giá độ bền vững dưới các điều kiện nhiễu thực tế (white noise, MP3, telephone) |
+| **Interpretability** | Cung cấp giải thích quyết định thông qua XAI để tăng tính tin cậy |
+
+---
+
+## 3. Dataset
+
+### ViSpoofDB — Vietnamese Spoof Database
+
+Dataset tự xây dựng gồm **14.195 mẫu** tiếng Việt, cân bằng giữa giọng thật và giọng AI:
+
+| Nhãn | Nguồn | Số mẫu |
+|---|---|---:|
+| **Real** | VIVOS, VLSP (người đọc tự nhiên) | ~7.000 |
+| **Fake** | FPT.AI, Viettel TTS, ElevenLabs, Coqui TTS | ~5.600 |
+| **Fake (unseen)** | gTTS — hệ thống TTS chưa thấy trong train | ~1.600 |
+
+**Phân chia tập dữ liệu:**
+
+```
+Train:        8.996 mẫu  (63%)
+Test Seen:    2.599 mẫu  (18%) — nguồn AI đã xuất hiện khi train
+Test Unseen:  2.600 mẫu  (18%) — nguồn AI hoàn toàn mới
+```
+
+**Tải dữ liệu:**
+
+| Phần | Link | Dung lượng |
+|---|---|---|
+| ViSpoofDB raw data | [Google Drive](https://drive.google.com/drive/folders/1NZWOJi8g9nLfId1fSTkEc9Ay18P0c2LR?usp=sharing) | ~2.4 GB |
+| Thu nghiem raw data | [Google Drive](https://drive.google.com/drive/folders/1Dt2kEhL8IFRJ3cIQNiuddiVPKwF5bqLC?usp=sharing) | ~274 MB |
+
+> Data không được lưu trong git. Đặt theo cấu trúc `vispoofdb/data/raw/{real,fake}/`.
+
+---
+
+## 4. Kiến trúc hệ thống
+
+```
+                    Audio Input (.wav / .mp3)
+                           |
+              +------------+------------+
+              |                         |
+     Feature Extraction            Raw Waveform
+              |                         |
+    +---------+---------+               |
+    |         |         |               |
+  LFCC     MFCC-Δ   Wav2Vec2        AASIST
+  (40d)   (480d)    (768d)        (Deep Learning)
+    |         |         |
+  SVM     XGBoost    MLP
+    |         |         |
+    +---------+---------+
+              |
+        Soft-Voting
+              |
+         Prediction
+     (Real / Deepfake)
+              |
+         XAI Explanation
+      (SHAP / Saliency)
+```
+
+**Pipeline 7 bước:**
+
+```
+Bước 1: Data Processing    → augmentation, chuẩn hoá, metadata
+Bước 2: Feature Extraction → LFCC, MFCC-Δ, Wav2Vec2, Tone-Aware, raw
+Bước 3: Model Training     → 6 mô hình cơ sở + AASIST
+Bước 4: Fusion Experiments → Late Fusion, Stacking, Early Fusion
+Bước 5: Visualization      → ROC, DET, Confusion Matrix
+Bước 6: Noise Evaluation   → robustness dưới white noise / MP3 / telephone
+Bước 7: Quantization       → nén AASIST (dynamic INT8)
+```
+
+---
+
+## 5. Các mô hình
 
 ### Mô hình cơ sở
 
-| Mô hình | Feature | Test Seen Acc | Test Seen EER | Test Unseen Acc | Test Unseen EER |
-|---|---|---:|---:|---:|---:|
-| SVM | LFCC (40d) | 83.11% | 20.14% | 93.42% | 4.64% |
-| MLP | Wav2Vec2 (768d) | 82.95% | 19.93% | 91.81% | 5.57% |
-| MLP | MFCC (40d) | 82.38% | 21.36% | 91.31% | 8.36% |
-| XGBoost | MFCC-Delta (480d) | 82.07% | 21.43% | 85.96% | 13.93% |
-| SVM | Tone-Aware (24d) | 73.87% | 26.00% | 74.46% | 25.43% |
-| **AASIST** | Raw waveform | **83.61%** | 21.14% | **97.19%** | **0.00%** |
+| Mô hình | Đặc trưng | Chiều | Ghi chú |
+|---|---|---:|---|
+| SVM (RBF) | LFCC | 40 | Linear Cepstral — tổng quát hoá tốt |
+| SVM (RBF) | MFCC | 40 | Mel-scale cepstral |
+| MLP | MFCC | 40 | 3 hidden layers, early stopping |
+| XGBoost | MFCC + Δ + ΔΔ | 480 | Hyperparameter tuning + early stopping |
+| MLP | Wav2Vec2 | 768 | Self-supervised pre-trained features |
+| SVM | Tone-Aware | 24 | F0, Jitter, Shimmer, HNR |
+| **AASIST** | Raw waveform | — | Graph Attention Network |
 
-### Ensemble & Fusion
+### Ensemble của dự án
 
-| Phương pháp | Test Seen Acc | Test Seen EER | Test Unseen Acc | Test Unseen EER |
-|---|---:|---:|---:|---:|
-| Late Fusion (Soft Voting) | 84.11% | 18.50% | 94.62% | 4.93% |
-| Stacking (Logistic Meta) | 84.76% | 18.07% | 94.69% | **2.64%** |
+**VietGuardEnsemble** — Soft-Voting trên 3 nhóm đặc trưng:
 
-> Test Seen = Commercial TTS (FPT.AI, ElevenLabs) — thước đo thực tế hơn.  
-> Test Unseen = gTTS — nguồn TTS đơn giản chưa thấy trong training.
+```
+Group 1: SVM + LFCC         (Spectral — Anti-Spoofing features)
+Group 2: XGBoost + MFCC-Δ   (Temporal — Dynamic features)
+Group 3: MLP + Wav2Vec2     (Semantic — Self-supervised deep features)
+```
+
+Quyết định cuối = trung bình xác suất của 3 model. Tự động fallback nếu một model lỗi.
 
 ---
 
-## Cấu trúc repository
+## 6. XAI — Giải thích mô hình
+
+| Phương pháp | Áp dụng cho | Giải thích |
+|---|---|---|
+| **TreeSHAP** | XGBoost | Feature importance chính xác, hiệu quả cao |
+| **KernelSHAP** | SVM, MLP | Model-agnostic, chậm hơn |
+| **Gradient Saliency** | AASIST | Vùng waveform quan trọng với quyết định |
+
+---
+
+## 7. Cấu trúc thư mục
 
 ```
 Vietnamese-Audio-Deepfake-Detection/
-├── app.py                            # Streamlit web app
-├── run_full_pipeline.py              # Chạy toàn bộ pipeline 7 bước
+├── app.py                             # Streamlit demo app
+├── run_full_pipeline.py               # Orchestrator 7 bước
 ├── requirements.txt
 ├── README.md
 │
-├── vispoofdb/                        # Package chính
-│   ├── data/                         # Dataset (lưu trên Google Drive)
-│   │   └── clean_data/metadata.csv   # Nhãn + split (file này được track)
+├── vispoofdb/                         # Package nghiên cứu chính
+│   ├── data/                          # Dữ liệu (lưu trên Google Drive)
+│   │   └── clean_data/metadata.csv    # File này được track trong git
 │   │
-│   ├── models/                       # Training scripts + model architectures
-│   │   ├── ensemble_system.py        # VietGuardEnsemble (3 model)
+│   ├── models/                        # Model architecture + training
+│   │   ├── ensemble_system.py         # VietGuardEnsemble
 │   │   ├── aasist/
-│   │   │   ├── aasist_inference.py   # AASIST inference wrapper + XAI
-│   │   │   ├── train_aasist_model.py
-│   │   │   └── models/baseline.py    # AASIST architecture
+│   │   │   ├── aasist_inference.py    # Inference wrapper + XAI
+│   │   │   ├── train_aasist_model.py  # Training script
+│   │   │   └── models/baseline.py    # AASIST architecture (Graph Attention)
 │   │   ├── train_lfcc_svm.py
 │   │   ├── train_svm.py
 │   │   ├── train_mlp.py
-│   │   ├── train_wav2vec.py
 │   │   ├── train_xgboost.py
-│   │   └── train_aasist.py
+│   │   ├── train_wav2vec.py
+│   │   └── train_aasist.py           # AASIST wrapper
 │   │
-│   ├── models_saved/                 # Model đã train (lưu trên Google Drive)
+│   ├── models_saved/                  # Checkpoints (lưu trên Google Drive)
 │   │
-│   ├── scripts/                      # Pipeline scripts
-│   │   ├── scripts_data_process.py   # Bước 1
+│   ├── scripts/                       # Pipeline scripts
+│   │   ├── scripts_data_process.py    # Bước 1
 │   │   ├── scripts_feature_extract.py # Bước 2
-│   │   ├── scripts_train.py          # Bước 3 — train tất cả model
-│   │   ├── experiment_fusion.py      # Bước 4 — fusion experiments
-│   │   ├── plot_results.py           # Bước 5
-│   │   ├── eval_noise_augmentation.py # Bước 6 — noise robustness
+│   │   ├── scripts_train.py           # Bước 3
+│   │   ├── experiment_fusion.py       # Bước 4
+│   │   ├── plot_results.py            # Bước 5
+│   │   ├── eval_noise_augmentation.py # Bước 6
 │   │   └── quantize.py               # Bước 7
 │   │
-│   ├── xai/vispoofdb_xai.py          # SHAP explainer
-│   ├── experiments/                  # Kết quả CSV + biểu đồ
-│   └── figures/                      # Biểu đồ ROC, DET, Confusion Matrix
+│   ├── xai/vispoofdb_xai.py          # SHAP explainer module
+│   ├── experiments/                   # CSV kết quả
+│   └── figures/                       # Biểu đồ ROC, DET, CM
 │
-└── thu_nghiem/                       # Code & data thử nghiệm ban đầu (legacy)
+└── thu_nghiem/                        # Prototype ban đầu (legacy)
 ```
 
 ---
 
-## Dataset
+## 8. Cài đặt
 
-Data **không** được lưu trong git (quá lớn). Tải về từ Google Drive:
-
-| Dataset | Link | Kích thước |
-|---|---|---|
-| **ViSpoofDB raw** (data chính) | [Google Drive](https://drive.google.com/drive/folders/1NZWOJi8g9nLfId1fSTkEc9Ay18P0c2LR?usp=sharing) | ~2.4 GB |
-| **Thu nghiem raw** (data thử nghiệm) | [Google Drive](https://drive.google.com/drive/folders/1Dt2kEhL8IFRJ3cIQNiuddiVPKwF5bqLC?usp=sharing) | ~274 MB |
-
-**Cấu trúc sau khi tải về:**
-```
-vispoofdb/data/
-├── raw/
-│   ├── real/       (~7.000 files WAV — VIVOS, VLSP)
-│   └── fake/
-│       ├── fpt/    (~2.000 files — FPT.AI TTS)
-│       ├── viettel/
-│       ├── elevenlabs/
-│       ├── coqui/
-│       └── gtts/   (test_unseen)
-└── clean_data/
-    ├── real/       (~14.000 files — augmented)
-    ├── fake/       (~7.195 files)
-    └── metadata.csv
-```
-
----
-
-## Cài đặt môi trường
+**Yêu cầu:** Python 3.10+
 
 ```bash
+# Tạo môi trường ảo
 python -m venv .venv
-.venv\Scripts\activate        # Windows
-# source .venv/bin/activate   # Linux / macOS
 
+# Kích hoạt
+.venv\Scripts\activate        # Windows
+source .venv/bin/activate     # Linux / macOS
+
+# Cài đặt dependencies
 pip install -r requirements.txt
 ```
 
----
-
-## Hướng dẫn chạy
-
-### Cách 1 — Chạy toàn bộ pipeline 1 lệnh
-
-```bash
-# Chạy đủ 7 bước (bao gồm Wav2Vec2 — mất 1-7 giờ)
-python run_full_pipeline.py
-
-# Bỏ Wav2Vec2 để tiết kiệm thời gian
-python run_full_pipeline.py --skip-wav2vec
-
-# Tự động tắt máy sau khi xong
-python run_full_pipeline.py --shutdown
-```
-
-### Cách 2 — Chạy từng bước thủ công
-
-| Bước | Lệnh | Mô tả | Thời gian |
-|---:|---|---|---:|
-| 1 | `python vispoofdb/scripts/scripts_data_process.py` | Xử lý & tạo metadata | ~5 phút |
-| 2 | `python vispoofdb/scripts/scripts_feature_extract.py` | Trích xuất features | ~1–7 giờ |
-| 3 | `python vispoofdb/scripts/scripts_train.py` | Train tất cả model | ~30 phút |
-| 4 | `python vispoofdb/scripts/experiment_fusion.py` | Fusion experiments | ~15 phút |
-| 5 | `python vispoofdb/scripts/plot_results.py` | Vẽ biểu đồ | ~2 phút |
-| 6 | `python vispoofdb/scripts/eval_noise_augmentation.py` | Đánh giá noise | ~15 phút |
-| 7 | `python vispoofdb/scripts/quantize.py` | Nén AASIST | ~5 phút |
-
-**Bỏ qua Wav2Vec2 (nếu chưa có features):**
-```bash
-python vispoofdb/scripts/scripts_train.py --skip-wav2vec
-```
-
-### Train riêng từng model
-
-```bash
-python vispoofdb/models/train_lfcc_svm.py       # SVM + LFCC (~30 giây)
-python vispoofdb/models/train_svm.py            # SVM + MFCC
-python vispoofdb/models/train_mlp.py            # MLP + MFCC
-python vispoofdb/models/train_xgboost.py        # XGBoost + MFCC-Delta (~20 phút)
-python vispoofdb/models/train_wav2vec.py        # MLP + Wav2Vec2
-python vispoofdb/models/aasist/train_aasist_model.py  # AASIST (~2 giờ trên T4 GPU)
-```
-
----
-
-## Chạy trên Google Colab (T4 GPU)
-
-```python
-# 1. Mount Google Drive
-from google.colab import drive
-drive.mount('/content/drive')
-
-# 2. Clone repo
-import os
-os.chdir('/content/drive/MyDrive')
-!git clone https://github.com/studie-e/Vietnamese-Audio-Deepfake-Detection.git
-os.chdir('Vietnamese-Audio-Deepfake-Detection')
-
-# 3. Cài đặt dependencies
-!pip install -r requirements.txt -q
-
-# 4. Chạy pipeline (data đã có trên Drive)
-!python vispoofdb/scripts/scripts_train.py --skip-wav2vec
-```
-
-> Data raw cần upload lên Google Drive trước theo cấu trúc `vispoofdb/data/` như trên.
-
----
-
-## Chạy Web App
-
-```bash
-streamlit run app.py
-```
-
-Mở: `http://localhost:8501`
-
-**3 chế độ:**
-- **Ensemble (3 models):** SVM+LFCC × XGBoost+MFCC-Delta × MLP+Wav2Vec2 — soft voting
-- **Single model:** MLP + Wav2Vec2
-- **Deep Learning:** AASIST (97.19% Test Unseen)
-
-**XAI tab:**
-- TreeSHAP / KernelSHAP cho sklearn models
-- Gradient Saliency cho AASIST
-
-> Nếu Wav2Vec2 không tải được (offline/thiếu model), Ensemble tự động fallback sang 2 model.
-
----
-
-## Yêu cầu phần cứng
+**Yêu cầu phần cứng:**
 
 | | Tối thiểu | Khuyến nghị |
 |---|---|---|
 | RAM | 8 GB | 16 GB |
-| GPU | Không bắt buộc | NVIDIA CUDA (cho AASIST) |
-| Disk | 3 GB (chỉ features) | 6 GB (đủ pipeline) |
+| GPU | Không bắt buộc | NVIDIA CUDA (AASIST nhanh hơn ~20x) |
+| Disk | 3 GB | 6 GB (đủ toàn bộ pipeline) |
 
-> AMD GPU không hỗ trợ CUDA — PyTorch fallback CPU.  
-> Wav2Vec2 feature extraction: ~1–7 giờ trên CPU với 14K files.
+> AMD GPU không hỗ trợ CUDA — PyTorch tự động fallback sang CPU.
+
+---
+
+## 9. Hướng dẫn chạy
+
+### Toàn bộ pipeline (1 lệnh)
+
+```bash
+# Đủ 7 bước
+python run_full_pipeline.py
+
+# Bỏ qua Wav2Vec2 feature extraction (tiết kiệm 1–7 giờ nếu đã có features)
+python run_full_pipeline.py --skip-wav2vec
+
+# Tự động tắt máy sau khi hoàn thành
+python run_full_pipeline.py --shutdown
+```
+
+### Từng bước riêng lẻ
+
+```bash
+python vispoofdb/scripts/scripts_data_process.py      # Bước 1 (~5 phút)
+python vispoofdb/scripts/scripts_feature_extract.py   # Bước 2 (~1–7 giờ)
+python vispoofdb/scripts/scripts_train.py             # Bước 3 (~30 phút)
+python vispoofdb/scripts/experiment_fusion.py         # Bước 4 (~15 phút)
+python vispoofdb/scripts/plot_results.py              # Bước 5 (~2 phút)
+python vispoofdb/scripts/eval_noise_augmentation.py   # Bước 6 (~15 phút)
+python vispoofdb/scripts/quantize.py                  # Bước 7 (~5 phút)
+```
+
+### Train từng model riêng
+
+```bash
+python vispoofdb/models/train_lfcc_svm.py
+python vispoofdb/models/train_xgboost.py
+python vispoofdb/models/train_wav2vec.py
+python vispoofdb/models/aasist/train_aasist_model.py   # Cần GPU để nhanh
+```
+
+### Chạy trên Google Colab (T4 GPU)
+
+```python
+# Mount Google Drive (data phải có sẵn trên Drive)
+from google.colab import drive
+drive.mount('/content/drive')
+
+import os
+os.chdir('/content/drive/MyDrive')
+
+# Clone repo
+!git clone https://github.com/studie-e/Vietnamese-Audio-Deepfake-Detection.git
+os.chdir('Vietnamese-Audio-Deepfake-Detection')
+
+# Cài dependencies
+!pip install -r requirements.txt -q
+
+# Chạy training (bỏ Wav2Vec2 nếu chưa có features)
+!python vispoofdb/scripts/scripts_train.py --skip-wav2vec
+
+# Hoặc train AASIST riêng (thấy epoch progress trực tiếp)
+!python vispoofdb/models/aasist/train_aasist_model.py
+```
+
+---
+
+## 10. Web App
+
+```bash
+streamlit run app.py
+# Mở: http://localhost:8501
+```
+
+**Các chế độ phát hiện:**
+
+| Chế độ | Mô tả |
+|---|---|
+| Ensemble (3 models) | SVM+LFCC × XGBoost+MFCC-Δ × MLP+Wav2Vec2, soft-voting |
+| Single Model | MLP + Wav2Vec2 |
+| Deep Learning | AASIST — raw waveform, gradient saliency |
+
+> Nếu Wav2Vec2 không tải được, Ensemble tự động fallback sang 2 model còn lại.
+
+---
+
+## 11. Giới hạn và hướng phát triển
+
+### Giới hạn hiện tại
+
+| Vấn đề | Mô tả |
+|---|---|
+| White noise | Cả 2 model chính đều sụt xuống ~50% (random guess) khi SNR thấp |
+| AASIST inference | Chậm trên CPU (~3–5 giây/file), cần GPU cho production |
+| Tone-Aware features | Kém hiệu quả (~74%) so với spectral features (~83–93%) |
+| Test Unseen bias | gTTS là TTS đơn giản nên kết quả unseen cao hơn thực tế |
+
+### Hướng phát triển
+
+- Augmentation với white noise trong quá trình training để tăng robustness
+- Fine-tune Wav2Vec2 trực tiếp trên tiếng Việt (thay vì dùng frozen features)
+- Thu thập thêm dữ liệu từ Commercial TTS mới (VALL-E X, VoiceBox, Bark)
+- Triển khai real-time detection với WebRTC
+- Thêm phân tích speaker diarization để phát hiện voice swap trong hội thoại
