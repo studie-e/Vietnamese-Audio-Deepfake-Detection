@@ -19,8 +19,8 @@ from vispoofdb.models.aasist.aasist_inference import AASISTDetector, AASISTXAIEx
 
 # ── Cấu hình trang ──────────────────────────────────────────────────────────
 st.set_page_config(
-    page_title="Viet-Guard: Anti-Deepfake",
-    page_icon="🛡️",
+    page_title="Viet-Guard: Vietnamese Audio Deepfake Detection",
+    page_icon=None,
     layout="wide",
 )
 
@@ -79,10 +79,10 @@ st.markdown("""
 # ── Header ───────────────────────────────────────────────────────────────────
 st.markdown("""
 <div class="main-header">
-    <h1>🛡️ VIET-GUARD</h1>
-    <p>Hệ thống phát hiện &amp; giải thích Giọng nói Deepfake tiếng Việt · Nhóm 17</p>
+    <h1>VIET-GUARD</h1>
+    <p>Phát hiện &amp; giải thích Giọng nói Deepfake tiếng Việt &nbsp;·&nbsp; Nhóm 17</p>
     <p style="font-size:0.82rem;color:#475569;margin-top:0.6rem;">
-        Ensemble 5 mô hình AI · SHAP Explainability · Vietnamese Audio Analysis
+        Ensemble 3 mô hình · SHAP Explainability · Vietnamese Audio Analysis
     </p>
 </div>
 """, unsafe_allow_html=True)
@@ -156,7 +156,7 @@ def load_system(mode_name="ensemble"):
         xai = VispoofdbAudioXAI(ens, n_background=8)
         return ens, xai
 
-with st.spinner("⏳ Đang khởi động hệ thống AI…"):
+with st.spinner("Đang khởi động hệ thống AI…"):
     try:
         if mode.startswith("Deep"):
             detector, explainer = load_system(mode_name="aasist")
@@ -186,7 +186,7 @@ with col_up:
 with col_info:
     st.markdown("""
     <div class="note-box">
-    <b>💡 Hướng dẫn sử dụng</b><br>
+    <b>Hướng dẫn sử dụng</b><br>
     1. Upload file ghi âm (.wav / .mp3)<br>
     2. Bấm <b>Phân tích</b><br>
     3. Xem kết quả tại tab <b>Phát hiện</b><br>
@@ -211,7 +211,7 @@ if uploaded_file:
             y_audio, sr_audio = librosa.load(tmp_path, sr=16000)
 
         # ── Phát hiện ────────────────────────────────────────────────────
-        with st.spinner("Hội đồng AI đang thẩm định…"):
+        with st.spinner("Đang phân tích…"):
             result = detector.predict_audio(tmp_path)
 
         os.remove(tmp_path)
@@ -219,12 +219,12 @@ if uploaded_file:
         # ── XAI (tuỳ chọn) ───────────────────────────────────────────────
         xai_results = None
         if run_xai and result.get("success"):
-            with st.spinner("🔬 Đang tính SHAP — lần đầu có thể mất 15–40 giây…"):
+            with st.spinner("Đang tính SHAP — lần đầu có thể mất 15–40 giây…"):
                 xai_results = explainer.explain(y_audio, sr_audio)
 
         # ── Hiển thị ─────────────────────────────────────────────────────
         if not result.get("success"):
-            st.error(f"❌ Lỗi: {result.get('error', 'Không xác định')}")
+            st.error(f"Lỗi: {result.get('error', 'Không xác định')}")
             st.stop()
 
         prob    = result["confidence_ai"]
@@ -277,7 +277,7 @@ if uploaded_file:
                 )
 
             if mode.startswith("Deep"):
-                st.markdown("#### 🧠 Thông tin mô hình")
+                st.markdown("#### Thông tin mô hình")
                 model_info = detector.get_model_info()
                 st.markdown(f"""
                 <div class="result-card">
@@ -288,10 +288,10 @@ if uploaded_file:
                 </div>
                 """, unsafe_allow_html=True)
             else:
-                st.markdown("#### 📋 Biểu quyết chi tiết của các mô hình")
+                st.markdown("#### Biểu quyết chi tiết của các mô hình")
                 cols = st.columns(min(len(details), 5))
                 for col, name, val in zip(cols, model_names, details):
-                    delta_text = "🔴 Fake" if val >= 0.5 else "🟢 Real"
+                    delta_text = "Fake" if val >= 0.5 else "Real"
                     col.metric(label=name, value=f"{val*100:.1f}%", delta=delta_text)
 
         # ==================================================================
@@ -299,23 +299,23 @@ if uploaded_file:
         # ==================================================================
         with tab_xai:
             if xai_results is None:
-                st.info("💡 Bật toggle **'Bật phân tích XAI'** trước khi nhấn Phân tích để xem giải thích.")
+                st.info("Bật toggle **'Bật phân tích XAI'** trước khi nhấn Phân tích để xem giải thích.")
                 st.stop()
             
             # AASIST XAI: Gradient-based saliency
             if mode.startswith("Deep"):
                 if xai_results.get("success"):
-                    st.markdown("### 🧠 Giải thích đặc trưng — AASIST (Gradient-based Saliency)")
+                    st.markdown("### Giải thích đặc trưng — AASIST (Gradient-based Saliency)")
                     st.markdown("""
                     <div class="note-box">
-                    ✅ <b>AASIST dùng Gradient-based Saliency</b> — tính độ nhạy cảm của output
+                    <b>AASIST dùng Gradient-based Saliency</b> — tính độ nhạy cảm của output
                     model deep learning đối với từng sample trong waveform.<br>
-                    🔴 Vùng đỏ (cao) = những vùng âm thanh quan trọng với quyết định AI<br>
-                    🟢 Vùng xanh (thấp) = những vùng ít ảnh hưởng đến kết quả
+                    Vùng đỏ (cao) = những vùng âm thanh quan trọng với quyết định AI<br>
+                    Vùng xanh (thấp) = những vùng ít ảnh hưởng đến kết quả
                     </div>
                     """, unsafe_allow_html=True)
                     
-                    st.markdown(f"**Xác suất AI: {prob*100:.2f}%** — Mức độ: {'Cao 🔴' if prob >= 0.7 else 'Trung bình 🟡' if prob >= 0.4 else 'Thấp 🟢'}")
+                    st.markdown(f"**Xác suất AI: {prob*100:.2f}%** — Mức độ: {'Cao' if prob >= 0.7 else 'Trung bình' if prob >= 0.4 else 'Thấp'}")
                     
                     # Plot saliency
                     saliency = xai_results.get("saliency", np.array([]))
@@ -344,14 +344,14 @@ if uploaded_file:
                     with col3:
                         st.metric("Phương pháp", "Gradient-based")
                 else:
-                    st.warning(f"⚠️ Không thể tính XAI: {xai_results.get('error', 'Unknown error')}")
+                    st.warning(f"Không thể tính XAI: {xai_results.get('error', 'Unknown error')}")
             
             # Ensemble/Single model XAI: SHAP
             else:
                 summary = xai_results.get("_ensemble_summary", {})
 
                 if summary.get("model_weights"):
-                    st.markdown("### 🧭 Tổng quan XAI")
+                    st.markdown("### Tổng quan XAI")
                     left_sum, right_sum = st.columns([1, 1])
                     with left_sum:
                         st.markdown("**Nhận xét tự động:**")
@@ -362,7 +362,7 @@ if uploaded_file:
                         st.pyplot(fig_weights, use_container_width=True)
 
                 # ── Ensemble overview — XÁC SUẤT THỰC của từng model ────────────
-                st.markdown("### ⚖️ Phiếu bầu / xác suất đầu ra")
+                st.markdown("### Phiếu bầu / xác suất đầu ra")
                 if len(details) > 1:
                     st.caption("Mỗi model độc lập dự đoán xác suất AI — kết quả cuối là trung bình cộng.")
                 else:
@@ -370,7 +370,7 @@ if uploaded_file:
 
                 vote_cols = st.columns(len(details))
                 for col, name, val in zip(vote_cols, model_names, details):
-                    verdict_label = "🔴 AI" if val >= 0.5 else "🟢 Real"
+                    verdict_label = "AI" if val >= 0.5 else "Real"
                     bg     = "#3B1A1A" if val >= 0.5 else "#1A3B1A"
                     border = "#F87171" if val >= 0.5 else "#4ADE80"
                     col.markdown(f"""
@@ -395,7 +395,7 @@ if uploaded_file:
                 <code>({' + '.join(f'{v:.2f}' for v in details)}) ÷ {denom} = <b>{avg:.3f}</b></code>
                 &nbsp;→&nbsp;
                 <b style="color:{'#EF4444' if avg>=0.5 else '#22C55E'}">
-                {'🚨 AI (≥ 0.5)' if avg >= 0.5 else '✅ Real (< 0.5)'}
+                {'AI (≥ 0.5)' if avg >= 0.5 else 'Real (< 0.5)'}
                 </b>
                 &nbsp;&nbsp;|&nbsp;&nbsp;
                 <b>{vote_phrase}</b>
@@ -407,22 +407,22 @@ if uploaded_file:
                 # ── XGBoost SHAP
                 xai_model_key = "XGBoost" if "XGBoost" in xai_results else ("Wav2Vec2" if "Wav2Vec2" in xai_results else None)
                 if xai_model_key == "XGBoost":
-                    st.markdown("### 🌲 Giải thích đặc trưng — XGBoost (TreeSHAP)")
+                    st.markdown("### Giải thích đặc trưng — XGBoost (TreeSHAP)")
                     st.markdown("""
                     <div class="note-box">
-                    ✅ <b>XGBoost dùng TreeSHAP</b> — tính toán đúng đóng góp của từng feature MFCC.<br>
-                    🔴 Bar đỏ = feature đẩy về phía AI &nbsp;|&nbsp;
-                    🟢 Bar xanh = feature đẩy về phía Real &nbsp;|&nbsp;
+                    <b>XGBoost dùng TreeSHAP</b> — tính toán đóng góp của từng feature MFCC.<br>
+                    Bar đỏ = feature đẩy về phía AI &nbsp;|&nbsp;
+                    Bar xanh = feature đẩy về phía Real &nbsp;|&nbsp;
                     Dashed line = điểm gốc (base value)
                     </div>
                     """, unsafe_allow_html=True)
                 elif xai_model_key == "Wav2Vec2":
-                    st.markdown("### 🎧 Giải thích đặc trưng — Wav2Vec2 (KernelSHAP)")
+                    st.markdown("### Giải thích đặc trưng — Wav2Vec2 (KernelSHAP)")
                     st.markdown("""
                     <div class="note-box">
-                    ✅ <b>Wav2Vec2 dùng KernelSHAP</b> — các chiều embedding được gom theo cụm 64 chiều.<br>
-                    🔴 Bar đỏ = chiều/nhóm đẩy về phía AI &nbsp;|&nbsp;
-                    🟢 Bar xanh = chiều/nhóm đẩy về phía Real
+                    <b>Wav2Vec2 dùng KernelSHAP</b> — các chiều embedding được gom theo cụm 64 chiều.<br>
+                    Bar đỏ = chiều/nhóm đẩy về phía AI &nbsp;|&nbsp;
+                    Bar xanh = chiều/nhóm đẩy về phía Real
                     </div>
                     """, unsafe_allow_html=True)
 
@@ -433,7 +433,7 @@ if uploaded_file:
                     logit    = base + sv_sum
                     final_p  = float(1.0 / (1.0 + np.exp(-logit)))
                     color    = "#EF4444" if final_p >= 0.5 else "#22C55E"
-                    verdict  = "AI / Deepfake 🚨" if final_p >= 0.5 else "Giọng thật ✅"
+                    verdict  = "AI / Deepfake" if final_p >= 0.5 else "Giọng thật"
 
                     st.markdown(f"""
                     <div style="background:#1E293B;border-radius:10px;padding:0.7rem 1.2rem;
@@ -451,7 +451,7 @@ if uploaded_file:
                     with col_tbl:
                         st.markdown("**Top 10 features:**")
                         for t in xgb_res["top_k"][:10]:
-                            bar_color = "🔴" if t["shap_value"] > 0 else "🟢"
+                            bar_color = "+" if t["shap_value"] > 0 else "-"
                             st.markdown(
                                 f"`{t['feature']}`  \n"
                                 f"{bar_color} `{t['shap_value']:+.4f}`"
