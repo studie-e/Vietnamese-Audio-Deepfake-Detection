@@ -59,21 +59,21 @@ if METADATA_PATH.exists():
 FEATURE_PATHS = {
     'lfcc': DATA_DIR / 'features_lfcc' / 'X_lfcc.npy',
     'mfcc40': DATA_DIR / 'features_mfcc' / 'X_data.npy',
-    'mfcc480': DATA_DIR / 'features_model' / 'svm' / 'X_all.npy',
+    'mfcc480': DATA_DIR / 'features_model' / 'xgb' / 'X_xgb.npy',
     'tone': DATA_DIR / 'features_model' / 'tone' / 'X_tone.npy',
     'wav2vec': DATA_DIR / 'features_wav2vec' / 'X_wav2vec.npy',
 }
 LABEL_PATHS = {
     'lfcc': DATA_DIR / 'features_lfcc' / 'y_lfcc.npy',
     'mfcc40': DATA_DIR / 'features_mfcc' / 'y_label.npy',
-    'mfcc480': DATA_DIR / 'features_model' / 'svm' / 'y_all.npy',
+    'mfcc480': DATA_DIR / 'features_model' / 'xgb' / 'y_xgb.npy',
     'tone': DATA_DIR / 'features_model' / 'tone' / 'y_tone.npy',
     'wav2vec': DATA_DIR / 'features_wav2vec' / 'y_wav2vec.npy',
 }
 SPLIT_PATHS = {
     'lfcc': DATA_DIR / 'features_lfcc' / 'splits_lfcc.npy',
     'mfcc40': DATA_DIR / 'features_mfcc' / 'splits.npy',
-    'mfcc480': DATA_DIR / 'features_model' / 'svm' / 'splits_svm.npy',
+    'mfcc480': DATA_DIR / 'features_model' / 'xgb' / 'splits_xgb.npy',
     'tone': DATA_DIR / 'features_model' / 'tone' / 'splits_tone.npy',
     'wav2vec': DATA_DIR / 'features_wav2vec' / 'splits_wav2vec.npy',
 }

@@ -385,22 +385,45 @@ if uploaded_file:
                     </div>
                     """, unsafe_allow_html=True)
 
-                avg        = sum(details) / len(details)
+                weights = result.get("weights")
                 votes_fake = sum(1 for v in details if v >= 0.5)
                 denom = len(details)
                 vote_phrase = f"{votes_fake}/{denom} model vote AI" if denom > 1 else "Single model output"
-                st.markdown(f"""
-                <div style="background:#1E293B;border-radius:10px;padding:0.9rem 1.4rem;
-                            margin-top:0.8rem;border:1px solid #334155;text-align:center;">
-                <code>({' + '.join(f'{v:.2f}' for v in details)}) ÷ {denom} = <b>{avg:.3f}</b></code>
-                &nbsp;→&nbsp;
-                <b style="color:{'#EF4444' if avg>=0.5 else '#22C55E'}">
-                {'AI (≥ 0.5)' if avg >= 0.5 else 'Real (< 0.5)'}
-                </b>
-                &nbsp;&nbsp;|&nbsp;&nbsp;
-                <b>{vote_phrase}</b>
-                </div>
-                """, unsafe_allow_html=True)
+
+                if weights and len(weights) > 1:
+                    weighted_sum = sum(w * v for w, v in zip(weights, details))
+                    sum_weights = sum(weights)
+                    weighted_avg = weighted_sum / sum_weights
+                    
+                    formula_parts = [f"({w:.2f} × {v:.2f})" for w, v in zip(weights, details)]
+                    formula_str = f"({' + '.join(formula_parts)}) ÷ {sum_weights:.2f} = <b>{weighted_avg:.3f}</b>"
+                    
+                    st.markdown(f"""
+                    <div style="background:#1E293B;border-radius:10px;padding:0.9rem 1.4rem;
+                                margin-top:0.8rem;border:1px solid #334155;text-align:center;">
+                    <code>{formula_str}</code>
+                    &nbsp;→&nbsp;
+                    <b style="color:{'#EF4444' if weighted_avg>=0.5 else '#22C55E'}">
+                    {'AI (≥ 0.5)' if weighted_avg >= 0.5 else 'Real (< 0.5)'}
+                    </b>
+                    &nbsp;&nbsp;|&nbsp;&nbsp;
+                    <b>{vote_phrase} (Soft-Voting)</b>
+                    </div>
+                    """, unsafe_allow_html=True)
+                else:
+                    avg = sum(details) / len(details)
+                    st.markdown(f"""
+                    <div style="background:#1E293B;border-radius:10px;padding:0.9rem 1.4rem;
+                                margin-top:0.8rem;border:1px solid #334155;text-align:center;">
+                    <code>({' + '.join(f'{v:.2f}' for v in details)}) ÷ {denom} = <b>{avg:.3f}</b></code>
+                    &nbsp;→&nbsp;
+                    <b style="color:{'#EF4444' if avg>=0.5 else '#22C55E'}">
+                    {'AI (≥ 0.5)' if avg >= 0.5 else 'Real (< 0.5)'}
+                    </b>
+                    &nbsp;&nbsp;|&nbsp;&nbsp;
+                    <b>{vote_phrase}</b>
+                    </div>
+                    """, unsafe_allow_html=True)
 
                 st.divider()
 

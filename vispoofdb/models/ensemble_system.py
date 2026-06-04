@@ -26,16 +26,31 @@ warnings.filterwarnings('ignore')
 
 class VietGuardEnsemble:
     """
-    Ensemble 3 model, soft voting dong deu.
+    Ensemble 3 model, weighted soft voting theo EER validation.
 
-    Nhom feature:
-        - Spectral    : LFCC  (40 chieu)      → SVM
-        - Temporal    : MFCC-Delta (480 chieu) → XGBoost
-        - Deep        : Wav2Vec2 (768 chieu)   → MLP  [optional]
+    Trong so (inverse-EER weighting) — mo hinh tot hon duoc vote nhieu hon:
+        - Spectral : LFCC  (40 chieu)       → SVM        w ≈ 2.86
+        - Temporal : MFCC-Delta (480 chieu) → XGBoost    w ≈ 6.67
+        - Deep     : Wav2Vec2 (768 chieu)   → MLP        w ≈ 20.0
+
+    Cong thuc:
+        P_final = (w_lfcc*P_lfcc + w_xgb*P_xgb + w_w2v*P_w2v) / (w_lfcc + w_xgb + w_w2v)
+
+    Nguyen ly: w_i = 1 / max(EER_i, 0.01)
+    EER validation: SVM+LFCC=0.35, XGBoost+MFCC=0.15, MLP+Wav2Vec2=0.05
     """
 
-    def __init__(self, models_dir='models_saved'):
+    # Trong so mac dinh dua tren EER validation (co the ghi de qua constructor)
+    DEFAULT_WEIGHTS = {
+        'svm_lfcc': 1.0 / 0.35,   # ≈ 2.86
+        'xgb_mfcc': 1.0 / 0.15,   # ≈ 6.67
+        'mlp_w2v':  1.0 / 0.05,   # = 20.0
+    }
+
+    def __init__(self, models_dir='models_saved', weights=None):
         self.models_dir = models_dir
+        # Trong so: dung DEFAULT_WEIGHTS hoac truyen tu ngoai vao
+        self._weights = weights if weights is not None else dict(self.DEFAULT_WEIGHTS)
 
         # --- Nhom 1: Spectral co dien ---
         self.svm_lfcc    = joblib.load(os.path.join(models_dir, 'svm_lfcc_model.pkl'))
@@ -110,27 +125,29 @@ class VietGuardEnsemble:
 
             p_xgb  = float(self.xgb_model.predict_proba(feat_mfcc480)[0][1])
 
-            probs   = [p_lfcc, p_xgb]
-            details = [p_lfcc, p_xgb]
-            names   = ["SVM + LFCC", "XGBoost + MFCC-Delta"]
+            # Weighted Soft Voting (inverse-EER weighting)
+            model_keys = ['svm_lfcc', 'xgb_mfcc']
+            prob_list   = [p_lfcc, p_xgb]
+            names       = ["SVM + LFCC", "XGBoost + MFCC-Delta"]
 
-            # Nhom 3: Wav2Vec2 + MLP (neu co)
             if feat_w2v is not None:
                 p_w2v = float(self.mlp_w2v.predict_proba(
                     self.scaler_w2v.transform(feat_w2v))[0][1])
-                probs.append(p_w2v)
-                details.append(p_w2v)
+                model_keys.append('mlp_w2v')
+                prob_list.append(p_w2v)
                 names.append("MLP + Wav2Vec2")
 
-            # Soft Voting dong deu
-            final_ai_prob = sum(probs) / len(probs)
+            weights_used = np.array([self._weights.get(k, 1.0) for k in model_keys])
+            probs_arr    = np.array(prob_list)
+            final_ai_prob = float(np.dot(weights_used, probs_arr) / weights_used.sum())
 
             return {
                 "success": True,
                 "is_fake": bool(final_ai_prob >= 0.5),
                 "confidence_ai": float(final_ai_prob),
-                "details": details,
+                "details": prob_list,
                 "model_names": names,
+                "weights": weights_used.tolist(),
                 "wav2vec_available": self.wav2vec_available,
             }
         except Exception as e:

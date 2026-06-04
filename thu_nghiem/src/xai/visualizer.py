@@ -112,16 +112,32 @@ def plot_ensemble_weights(summary: dict) -> plt.Figure:
     Biểu đồ donut thể hiện mức độ ảnh hưởng của từng model
     trong quyết định ensemble.
     """
-    weights = summary["model_weights"]
+    weights = summary.get("model_weights", {})
     labels  = list(weights.keys())
-    sizes   = [weights[k] * 100 for k in labels]
+    
+    fig, ax = plt.subplots(figsize=(6, 5))
+    fig.patch.set_facecolor(BG_DARK)
+    ax.set_facecolor(BG_DARK)
+    
+    if not labels:
+        ax.text(0.5, 0.5, "Không có dữ liệu đóng góp mô hình",
+                ha="center", va="center", color=TEXT_LIGHT, fontsize=10)
+        ax.axis("off")
+        fig.tight_layout()
+        return fig
+
+    total_weight = sum(weights.values())
+    if total_weight < 1e-6:
+        pie_sizes = [1.0] * len(labels)
+        display_sizes = [0.0] * len(labels)
+    else:
+        pie_sizes = [weights[k] * 100 for k in labels]
+        display_sizes = pie_sizes
 
     palette = ["#6366F1", "#06B6D4", "#F59E0B", "#EF4444", "#10B981"]
 
-    fig, ax = plt.subplots(figsize=(6, 5))
-
     wedges, texts, autotexts = ax.pie(
-        sizes,
+        pie_sizes,
         labels=None,
         autopct="%1.1f%%",
         startangle=140,
@@ -130,26 +146,26 @@ def plot_ensemble_weights(summary: dict) -> plt.Figure:
         wedgeprops=dict(width=0.55, edgecolor=BG_DARK, linewidth=2),
     )
 
-    for at in autotexts:
+    for at, ds in zip(autotexts, display_sizes):
+        at.set_text(f"{ds:.1f}%")
         at.set_color(TEXT_LIGHT)
         at.set_fontsize(9)
 
     # Legend ngoài
     ax.legend(
-        wedges, [f"{l}  ({s:.1f}%)" for l, s in zip(labels, sizes)],
+        wedges, [f"{l}  ({s:.1f}%)" for l, s in zip(labels, display_sizes)],
         loc="lower center", bbox_to_anchor=(0.5, -0.18),
         ncol=2, facecolor=BG_CARD, edgecolor=GRID_COLOR,
         labelcolor=TEXT_LIGHT, fontsize=8.5
     )
 
-    dominant = summary["dominant_model"]
+    dominant = summary.get("dominant_model", "N/A")
     ax.set_title(f"⚖️ Tầm quan trọng từng Model\n(Model chi phối: {dominant})",
                  fontsize=10, color=TEXT_LIGHT, pad=14)
 
-    fig.patch.set_facecolor(BG_DARK)
-    ax.set_facecolor(BG_DARK)
     fig.tight_layout()
     return fig
+
 
 
 # ---------------------------------------------------------------------------
